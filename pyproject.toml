@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "taskiq-aio-pika"
+version = "0.1.0"
+description = ""
+authors = ["Pavel Kirilin <win10@list.ru>"]
+readme = "README.md"
+packages = [{ include = "taskiq", from = "taskiq_aio_pika" }]
+
+[tool.poetry.dependencies]
+python = "^3.7"
+taskiq = { git = "https://github.com/taskiq-python/taskiq", branch = "master" }
+
+[tool.poetry.dev-dependencies]
+pytest = "^5.2"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
