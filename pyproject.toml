@@ -9,9 +9,12 @@ packages = [{ include = "taskiq", from = "taskiq_aio_pika" }]
 [tool.poetry.dependencies]
 python = "^3.7"
 taskiq = { git = "https://github.com/taskiq-python/taskiq", branch = "master" }
+aio-pika = "^8.1.0"
+isort = "^5.10.1"
+black = "^22.6.0"
 
 [tool.poetry.dev-dependencies]
-pytest = "^5.2"
+pytest = "^7.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
