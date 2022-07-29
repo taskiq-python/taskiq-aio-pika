@@ -14,7 +14,7 @@ class AioPikaBroker(AsyncBroker):
     def __init__(
         self,
         result_backend: Optional[AsyncResultBackend[_T]] = None,
-        qos: int = 1,
+        qos: int = 10,
         loop: Optional[AbstractEventLoop] = None,
         max_channel_pool_size: int = 2,
         max_connection_pool_size: int = 10,
@@ -77,6 +77,7 @@ class AioPikaBroker(AsyncBroker):
 
     async def listen(self) -> AsyncGenerator[TaskiqMessage, None]:
         async with self.channel_pool.acquire() as channel:
+            await channel.set_qos(prefetch_count=self.qos)
             queue = await channel.get_queue(self.queue_name, ensure=False)
             async with queue.iterator() as queue_iter:
                 async for rmq_message in queue_iter:
