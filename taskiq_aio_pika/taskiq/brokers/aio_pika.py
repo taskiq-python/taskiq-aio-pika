@@ -84,8 +84,11 @@ class AioPikaBroker(AsyncBroker):
                     async with rmq_message.process():
                         try:
                             yield TaskiqMessage.parse_raw(
-                                rmq_message,
+                                rmq_message.body,
                                 content_type=rmq_message.content_type,
                             )
                         except ValueError:
                             continue
+
+    async def shutdown(self) -> None:
+        await self.connection_pool.close()
