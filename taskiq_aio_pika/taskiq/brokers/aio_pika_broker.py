@@ -64,7 +64,7 @@ class AioPikaBroker(AsyncBroker):
             else:
                 exchange = await channel.get_exchange(self.exchange_name, ensure=False)
             queue = await channel.declare_queue(self.queue_name)
-            await queue.bind(exchange=exchange, routing_key="*")
+            await queue.bind(exchange=exchange, routing_key="#")
 
     async def kick(self, message: BrokerMessage) -> None:
         rmq_msg = Message(
@@ -77,7 +77,7 @@ class AioPikaBroker(AsyncBroker):
         )
         async with self.channel_pool.acquire() as channel:
             exchange = await channel.get_exchange(self.exchange_name, ensure=False)
-            await exchange.publish(rmq_msg, routing_key=message.task_id)
+            await exchange.publish(rmq_msg, routing_key=message.task_name)
 
     async def listen(self) -> AsyncGenerator[BrokerMessage, None]:
         async with self.channel_pool.acquire() as channel:
