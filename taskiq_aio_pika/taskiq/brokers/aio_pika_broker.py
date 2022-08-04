@@ -1,11 +1,12 @@
-from typing import Any, AsyncGenerator, Dict, Optional, TypeVar
+from asyncio import AbstractEventLoop
+from typing import Any, AsyncGenerator, Optional, TypeVar
+
+from aio_pika import Channel, ExchangeType, Message, connect_robust
+from aio_pika.abc import AbstractChannel, AbstractRobustConnection
+from aio_pika.pool import Pool
 from taskiq.abc.broker import AsyncBroker
 from taskiq.abc.result_backend import AsyncResultBackend
-from taskiq.message import TaskiqMessage
-from aio_pika.abc import AbstractRobustConnection
-from aio_pika.pool import Pool
-from asyncio import AbstractEventLoop
-from aio_pika import connect_robust, Channel, Message, ExchangeType
+from taskiq.message import BrokerMessage
 
 _T = TypeVar("_T")
 
@@ -35,7 +36,7 @@ class AioPikaBroker(AsyncBroker):
             loop=loop,
         )
 
-        async def get_channel() -> Channel:
+        async def get_channel() -> AbstractChannel:
             async with self.connection_pool.acquire() as connection:
                 return await connection.channel()
 
@@ -62,20 +63,20 @@ class AioPikaBroker(AsyncBroker):
             queue = await channel.declare_queue(self.queue_name)
             await queue.bind(exchange=exchange, routing_key="*")
 
-    async def kick(self, message: TaskiqMessage) -> None:
+    async def kick(self, message: BrokerMessage) -> None:
         rmq_msg = Message(
-            body=message.json().encode(),
-            content_type="application/json",
+            body=message.message.encode(),
             headers={
                 "task_id": message.task_id,
                 "task_name": message.task_name,
+                **message.headers,
             },
         )
         async with self.channel_pool.acquire() as channel:
             exchange = await channel.get_exchange(self.exchange_name, ensure=False)
             await exchange.publish(rmq_msg, routing_key=message.task_id)
 
-    async def listen(self) -> AsyncGenerator[TaskiqMessage, None]:
+    async def listen(self) -> AsyncGenerator[BrokerMessage, None]:
         async with self.channel_pool.acquire() as channel:
             await channel.set_qos(prefetch_count=self.qos)
             queue = await channel.get_queue(self.queue_name, ensure=False)
@@ -83,9 +84,9 @@ class AioPikaBroker(AsyncBroker):
                 async for rmq_message in queue_iter:
                     async with rmq_message.process():
                         try:
-                            yield TaskiqMessage.parse_raw(
+                            yield BrokerMessage.parse_raw(
                                 rmq_message.body,
-                                content_type=rmq_message.content_type,
+                                content_type=rmq_message.content_type or "",
                             )
                         except ValueError:
                             continue
