@@ -1,4 +1,5 @@
 from asyncio import AbstractEventLoop
+from logging import getLogger
 from typing import Any, AsyncGenerator, Optional, TypeVar
 
 from aio_pika import Channel, ExchangeType, Message, connect_robust
@@ -9,6 +10,8 @@ from taskiq.abc.result_backend import AsyncResultBackend
 from taskiq.message import BrokerMessage
 
 _T = TypeVar("_T")
+
+logger = getLogger("taskiq.aio_pika_broker")
 
 
 class AioPikaBroker(AsyncBroker):
@@ -84,12 +87,18 @@ class AioPikaBroker(AsyncBroker):
                 async for rmq_message in queue_iter:
                     async with rmq_message.process():
                         try:
-                            yield BrokerMessage.parse_raw(
-                                rmq_message.body,
-                                content_type=rmq_message.content_type or "",
+                            yield BrokerMessage(
+                                task_id=rmq_message.headers["task_id"],
+                                task_name=rmq_message.headers["task_name"],
+                                message=rmq_message.body,
+                                headers=rmq_message.headers,
                             )
-                        except ValueError:
-                            continue
+                        except (ValueError, LookupError) as exc:
+                            logger.debug(
+                                "Cannot read broker message %s",
+                                exc,
+                                exc_info=True,
+                            )
 
     async def shutdown(self) -> None:
         await self.connection_pool.close()
