@@ -1,6 +1,6 @@
 from asyncio import AbstractEventLoop
 from logging import getLogger
-from typing import Any, AsyncGenerator, Optional, TypeVar
+from typing import Any, AsyncGenerator, Callable, Optional, TypeVar
 
 from aio_pika import Channel, ExchangeType, Message, connect_robust
 from aio_pika.abc import AbstractChannel, AbstractRobustConnection
@@ -18,6 +18,7 @@ class AioPikaBroker(AsyncBroker):
     def __init__(
         self,
         result_backend: Optional[AsyncResultBackend[_T]] = None,
+        task_id_generator: Optional[Callable[[], str]] = None,
         qos: int = 10,
         loop: Optional[AbstractEventLoop] = None,
         max_channel_pool_size: int = 2,
@@ -28,7 +29,7 @@ class AioPikaBroker(AsyncBroker):
         *connection_args: Any,
         **connection_kwargs: Any,
     ) -> None:
-        super().__init__(result_backend)
+        super().__init__(result_backend, task_id_generator)
 
         async def _get_rmq_connection() -> AbstractRobustConnection:
             return await connect_robust(*connection_args, **connection_kwargs)
@@ -72,7 +73,7 @@ class AioPikaBroker(AsyncBroker):
             headers={
                 "task_id": message.task_id,
                 "task_name": message.task_name,
-                **message.headers,
+                **message.labels,
             },
         )
         async with self.channel_pool.acquire() as channel:
@@ -88,10 +89,10 @@ class AioPikaBroker(AsyncBroker):
                     async with rmq_message.process():
                         try:
                             yield BrokerMessage(
-                                task_id=rmq_message.headers["task_id"],
-                                task_name=rmq_message.headers["task_name"],
+                                task_id=rmq_message.headers.pop("task_id"),
+                                task_name=rmq_message.headers.pop("task_name"),
                                 message=rmq_message.body,
-                                headers=rmq_message.headers,
+                                labels=rmq_message.headers,
                             )
                         except (ValueError, LookupError) as exc:
                             logger.debug(
@@ -101,4 +102,5 @@ class AioPikaBroker(AsyncBroker):
                             )
 
     async def shutdown(self) -> None:
+        await super().shutdown()
         await self.connection_pool.close()

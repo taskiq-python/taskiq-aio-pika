@@ -292,7 +292,7 @@ testing = ["argcomplete", "hypothesis (>=3.56)", "mock", "nose", "pygments (>=2.
 
 [[package]]
 name = "taskiq"
-version = "0.1.1"
+version = "0.0.1"
 description = "Asynchronous task queue with async support"
 category = "main"
 optional = false
@@ -307,7 +307,7 @@ typing-extensions = ">=3.10.0.0"
 type = "git"
 url = "https://github.com/taskiq-python/taskiq"
 reference = "master"
-resolved_reference = "8eb785068766b8ad78dc4b5412758fd5e8d848d3"
+resolved_reference = "671546e0efeeb7bf16f1a1350d9ba7d6a49fdcb0"
 
 [[package]]
 name = "tomli"
