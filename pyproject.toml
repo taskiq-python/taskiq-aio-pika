@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "taskiq-aio-pika"
-version = "0.1.0"
+version = "0.0.1"
 description = ""
 authors = ["Pavel Kirilin <win10@list.ru>"]
 readme = "README.md"
