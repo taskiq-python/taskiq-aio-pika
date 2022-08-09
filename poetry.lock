@@ -296,18 +296,11 @@ version = "0.0.1"
 description = "Asynchronous task queue with async support"
 category = "main"
 optional = false
-python-versions = "^3.7"
-develop = false
+python-versions = ">=3.7,<4.0"
 
 [package.dependencies]
-pydantic = "^1.6.2"
+pydantic = ">=1.6.2,<2.0.0"
 typing-extensions = ">=3.10.0.0"
-
-[package.source]
-type = "git"
-url = "https://github.com/taskiq-python/taskiq"
-reference = "master"
-resolved_reference = "671546e0efeeb7bf16f1a1350d9ba7d6a49fdcb0"
 
 [[package]]
 name = "tomli"
@@ -361,7 +354,7 @@ testing = ["pytest (>=6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytest-
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.7"
-content-hash = "2685574b28625eb779af38ceadc8113f5c69f81c7839cc39d01f0168c685ac2e"
+content-hash = "218d220e89fd36c1629ea463fe5e8165b94b7cbcd8cb828e2db0007e07c20d47"
 
 [metadata.files]
 aio-pika = [
@@ -584,7 +577,10 @@ pytest = [
     {file = "pytest-7.1.2-py3-none-any.whl", hash = "sha256:13d0e3ccfc2b6e26be000cb6568c832ba67ba32e719443bfe725814d3c42433c"},
     {file = "pytest-7.1.2.tar.gz", hash = "sha256:a06a0425453864a270bc45e71f783330a7428defb4230fb5e6a731fde06ecd45"},
 ]
-taskiq = []
+taskiq = [
+    {file = "taskiq-0.0.1-py3-none-any.whl", hash = "sha256:0a22d761f02ce91d18cc05e024b78cb533c2c3d217fa29b79ed9f11fb067bf68"},
+    {file = "taskiq-0.0.1.tar.gz", hash = "sha256:c0d2c9b9408018bb21f5fa954597b0dd676bae8300a17212568c7e2892a4f1d5"},
+]
 tomli = [
     {file = "tomli-2.0.1-py3-none-any.whl", hash = "sha256:939de3e7a6161af0c887ef91b7d41a53e7c5a1ca976325f429cb46ea9bc30ecc"},
     {file = "tomli-2.0.1.tar.gz", hash = "sha256:de526c12914f0c550d15924c62d72abc48d6fe7364aa87328337a31007fe8a4f"},
