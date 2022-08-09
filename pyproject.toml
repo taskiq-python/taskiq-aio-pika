@@ -4,7 +4,6 @@ version = "0.0.1"
 description = ""
 authors = ["Pavel Kirilin <win10@list.ru>"]
 readme = "README.md"
-packages = [{ include = "taskiq", from = "taskiq_aio_pika" }]
 
 [tool.poetry.dependencies]
 python = "^3.7"
