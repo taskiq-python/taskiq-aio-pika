@@ -7,7 +7,7 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.7"
-taskiq = "^0.0.1"
+taskiq = "^0"
 aio-pika = "^8.1.0"
 isort = "^5.10.1"
 black = "^22.6.0"
