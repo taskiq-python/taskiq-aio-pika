@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "taskiq-aio-pika"
 version = "0.0.1"
-description = ""
+description = "RabbitMQ broker for taskiq"
 authors = ["Pavel Kirilin <win10@list.ru>"]
 readme = "README.md"
 
@@ -20,6 +20,9 @@ pre-commit = "^2.20.0"
 yesqa = "^1.4.0"
 autoflake = "^1.4"
 wemake-python-styleguide = "^0.16.1"
+pytest-xdist = { version = "^2.5.0", extras = ["psutil"] }
+anyio = "^3.6.1"
+pytest-cov = "^3.0.0"
 
 [tool.mypy]
 strict = true

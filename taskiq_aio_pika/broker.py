@@ -19,6 +19,7 @@ class AioPikaBroker(AsyncBroker):
 
     def __init__(  # noqa: WPS211
         self,
+        url: Optional[str] = None,
         result_backend: Optional[AsyncResultBackend[_T]] = None,
         task_id_generator: Optional[Callable[[], str]] = None,
         qos: int = 10,
@@ -29,13 +30,39 @@ class AioPikaBroker(AsyncBroker):
         queue_name: str = "taskiq",
         declare_exchange: bool = True,
         routing_key: str = "#",
-        *connection_args: Any,
+        exchange_type: ExchangeType = ExchangeType.TOPIC,
         **connection_kwargs: Any,
     ) -> None:
+        """
+        Construct a new broker.
+
+        :param url: url to rabbitmq. If None,
+            the default "amqp://guest:guest@localhost:5672" is used.
+        :param result_backend: custom result backend.
+
+        :param task_id_generator: custom task_id genertaor.
+        :param qos: number of messages that worker can prefetch.
+        :param loop: specific even loop.
+        :param max_channel_pool_size: maximum number of channels for each connection.
+        :param max_connection_pool_size: maximum number of connections in pool.
+        :param exchange_name: name of exchange that used to send messages.
+        :param queue_name: queue that used to get incoming messages.
+        :param declare_exchange: whether you want to declare new exchange
+            if it doesn't exist.
+        :param routing_key: that used to bind that queue to the exchange.
+        :param exchange_type: type of the exchange.
+            Used only if `declare_exchange` is True.
+        :param connection_kwargs: additional keyword arguments,
+            for connect_robust method of aio-pika.
+        """
         super().__init__(result_backend, task_id_generator)
 
         async def _get_rmq_connection() -> AbstractRobustConnection:
-            return await connect_robust(*connection_args, **connection_kwargs)
+            return await connect_robust(
+                url,
+                loop=loop,
+                **connection_kwargs,
+            )
 
         self._connection_pool: Pool[AbstractRobustConnection] = Pool(
             _get_rmq_connection,
@@ -54,6 +81,7 @@ class AioPikaBroker(AsyncBroker):
         )
 
         self._exchange_name = exchange_name
+        self._exchange_type = exchange_type
         self._qos = qos
         self._declare_exchange = declare_exchange
         self._queue_name = queue_name
@@ -65,7 +93,7 @@ class AioPikaBroker(AsyncBroker):
             if self._declare_exchange:
                 exchange = await channel.declare_exchange(
                     self._exchange_name,
-                    type=ExchangeType.TOPIC,
+                    type=self._exchange_type,
                 )
             else:
                 exchange = await channel.get_exchange(self._exchange_name, ensure=False)

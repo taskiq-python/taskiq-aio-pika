@@ -83,6 +83,12 @@ per-file-ignores =
   test_*.py,tests.py,tests_*.py,*/tests/*:
   ; Use of assert detected
   S101,
+  ; Found outer scope names shadowing.
+  WPS442,
+  ; Found direct magic attribute usage.
+  WPS609,
+  ; Found protected attribute usage
+  WPS437,
 
 exclude =
   ./.git,
