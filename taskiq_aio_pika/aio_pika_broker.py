@@ -9,13 +9,15 @@ from taskiq.abc.broker import AsyncBroker
 from taskiq.abc.result_backend import AsyncResultBackend
 from taskiq.message import BrokerMessage
 
-_T = TypeVar("_T")
+_T = TypeVar("_T")  # noqa: WPS111
 
 logger = getLogger("taskiq.aio_pika_broker")
 
 
 class AioPikaBroker(AsyncBroker):
-    def __init__(
+    """Broker that works with RabbitMQ."""
+
+    def __init__(  # noqa: WPS211
         self,
         result_backend: Optional[AsyncResultBackend[_T]] = None,
         task_id_generator: Optional[Callable[[], str]] = None,
@@ -26,6 +28,7 @@ class AioPikaBroker(AsyncBroker):
         exchange_name: str = "taskiq",
         queue_name: str = "taskiq",
         declare_exchange: bool = True,
+        routing_key: str = "#",
         *connection_args: Any,
         **connection_kwargs: Any,
     ) -> None:
@@ -34,40 +37,54 @@ class AioPikaBroker(AsyncBroker):
         async def _get_rmq_connection() -> AbstractRobustConnection:
             return await connect_robust(*connection_args, **connection_kwargs)
 
-        self.connection_pool: Pool[AbstractRobustConnection] = Pool(
+        self._connection_pool: Pool[AbstractRobustConnection] = Pool(
             _get_rmq_connection,
             max_size=max_connection_pool_size,
             loop=loop,
         )
 
         async def get_channel() -> AbstractChannel:
-            async with self.connection_pool.acquire() as connection:
+            async with self._connection_pool.acquire() as connection:
                 return await connection.channel()
 
-        self.channel_pool: Pool[Channel] = Pool(
+        self._channel_pool: Pool[Channel] = Pool(
             get_channel,
             max_size=max_channel_pool_size,
             loop=loop,
         )
 
-        self.exchange_name = exchange_name
-        self.qos = qos
-        self.declare_exchange = declare_exchange
-        self.queue_name = queue_name
+        self._exchange_name = exchange_name
+        self._qos = qos
+        self._declare_exchange = declare_exchange
+        self._queue_name = queue_name
+        self._routing_key = routing_key
 
     async def startup(self) -> None:
-        async with self.channel_pool.acquire() as channel:
-            if self.declare_exchange:
+        """Create exchange and queue on startup."""
+        async with self._channel_pool.acquire() as channel:
+            if self._declare_exchange:
                 exchange = await channel.declare_exchange(
-                    self.exchange_name,
+                    self._exchange_name,
                     type=ExchangeType.TOPIC,
                 )
             else:
-                exchange = await channel.get_exchange(self.exchange_name, ensure=False)
-            queue = await channel.declare_queue(self.queue_name)
-            await queue.bind(exchange=exchange, routing_key="#")
+                exchange = await channel.get_exchange(self._exchange_name, ensure=False)
+            queue = await channel.declare_queue(self._queue_name)
+            await queue.bind(exchange=exchange, routing_key=self._routing_key)
 
     async def kick(self, message: BrokerMessage) -> None:
+        """
+        Send message to the exchange.
+
+        This function constructs rmq message
+        and sends it.
+
+        The message has task_id and task_name and labels
+        in headers. And message's routing key is the same
+        as the task_name.
+
+        :param message: message to send.
+        """
         rmq_msg = Message(
             body=message.message.encode(),
             headers={
@@ -76,14 +93,22 @@ class AioPikaBroker(AsyncBroker):
                 **message.labels,
             },
         )
-        async with self.channel_pool.acquire() as channel:
-            exchange = await channel.get_exchange(self.exchange_name, ensure=False)
+        async with self._channel_pool.acquire() as channel:
+            exchange = await channel.get_exchange(self._exchange_name, ensure=False)
             await exchange.publish(rmq_msg, routing_key=message.task_name)
 
     async def listen(self) -> AsyncGenerator[BrokerMessage, None]:
-        async with self.channel_pool.acquire() as channel:
-            await channel.set_qos(prefetch_count=self.qos)
-            queue = await channel.get_queue(self.queue_name, ensure=False)
+        """
+        Listen to queue.
+
+        This function listens to queue and yields
+        new messages.
+
+        :yield: parsed broker messages.
+        """
+        async with self._channel_pool.acquire() as channel:
+            await channel.set_qos(prefetch_count=self._qos)
+            queue = await channel.get_queue(self._queue_name, ensure=False)
             async with queue.iterator() as queue_iter:
                 async for rmq_message in queue_iter:
                     async with rmq_message.process():
@@ -102,5 +127,6 @@ class AioPikaBroker(AsyncBroker):
                             )
 
     async def shutdown(self) -> None:
+        """Close all connections on shutdown."""
         await super().shutdown()
-        await self.connection_pool.close()
+        await self._connection_pool.close()
