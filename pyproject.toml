@@ -4,6 +4,19 @@ version = "0.0.1"
 description = "RabbitMQ broker for taskiq"
 authors = ["Pavel Kirilin <win10@list.ru>"]
 readme = "README.md"
+classifiers = [
+    "Framework :: Taskiq",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+]
+homepage = "https://github.com/taskiq-python/taskiq-aio-pika"
+repository = "https://github.com/taskiq-python/taskiq-aio-pika"
+keywords = ["taskiq", "tasks", "distributed", "async", "aio-pika"]
 
 [tool.poetry.dependencies]
 python = "^3.7"
