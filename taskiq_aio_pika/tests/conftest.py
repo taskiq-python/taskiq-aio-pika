@@ -112,7 +112,10 @@ async def exchange(
     yield exchange
 
     try:
-        await exchange.delete(timeout=1)
+        await exchange.delete(
+            timeout=1,
+            if_unused=False,
+        )
     except ChannelNotFoundEntity:  # pragma: no cover
         pass  # noqa: WPS420
 
@@ -137,7 +140,11 @@ async def queue(
     yield queue
 
     try:
-        await queue.delete(timeout=1)
+        await queue.delete(
+            timeout=1,
+            if_empty=False,
+            if_unused=False,
+        )
     except ChannelNotFoundEntity:  # pragma: no cover
         pass  # noqa: WPS420
 
@@ -170,6 +177,7 @@ async def broker(
         exchange_name=exchange_name,
         queue_name=queue_name,
     )
+    broker.is_worker_process = True
 
     await broker.startup()
 
