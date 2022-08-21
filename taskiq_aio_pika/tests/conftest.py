@@ -177,6 +177,7 @@ async def broker(
         exchange_name=exchange_name,
         queue_name=queue_name,
     )
+    broker.is_worker_process = True
 
     await broker.startup()
 
