@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "taskiq-aio-pika"
-version = "0.0.4"
+version = "0.0.5"
 description = "RabbitMQ broker for taskiq"
 authors = ["Pavel Kirilin <win10@list.ru>"]
 readme = "README.md"
@@ -35,6 +35,8 @@ wemake-python-styleguide = "^0.16.1"
 pytest-xdist = { version = "^2.5.0", extras = ["psutil"] }
 anyio = "^3.6.1"
 pytest-cov = "^3.0.0"
+mock = "^4.0.3"
+types-mock = "^4.0.15"
 
 [tool.mypy]
 strict = true
