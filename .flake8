@@ -81,6 +81,8 @@ ignore =
 per-file-ignores =
   ; all tests
   test_*.py,tests.py,tests_*.py,*/tests/*:
+  ; Found magic number
+  WPS432,
   ; Use of assert detected
   S101,
   ; Found outer scope names shadowing.

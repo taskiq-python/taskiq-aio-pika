@@ -1,5 +1,6 @@
 import asyncio
 import uuid
+from unittest import mock
 
 import pytest
 from aio_pika import Channel, Message
@@ -34,9 +35,11 @@ async def test_kick_success(broker: AioPikaBroker) -> None:
 
     await broker.kick(sent)
 
-    async for inc_msg in broker.listen():
-        message = inc_msg
-        break
+    callback = mock.AsyncMock()
+
+    with pytest.raises(asyncio.TimeoutError):
+        await asyncio.wait_for(broker.listen(callback), timeout=0.2)
+    message = callback.call_args_list[0].args[0]
 
     assert message == sent
 
@@ -97,9 +100,11 @@ async def test_listen(broker: AioPikaBroker, exchange: AbstractExchange) -> None
         routing_key="task_name",
     )
 
-    async for inc_message in broker.listen():
-        message = inc_message
-        break
+    callback = mock.AsyncMock()
+
+    with pytest.raises(asyncio.TimeoutError):
+        await asyncio.wait_for(broker.listen(callback), timeout=0.2)
+    message = callback.call_args_list[0].args[0]
 
     assert message.message == "test_message"
     assert message.labels == {"label1": "label_val"}
@@ -124,11 +129,12 @@ async def test_wrong_format(
         Message(b"wrong"),
         routing_key=queue.name,
     )
+    callback = mock.AsyncMock()
 
     with pytest.raises(asyncio.TimeoutError):
         await asyncio.wait_for(
-            broker.listen().__anext__(),
-            0.2,  # noqa: WPS432
+            broker.listen(callback=callback),
+            0.2,
         )
 
     with pytest.raises(QueueEmpty):

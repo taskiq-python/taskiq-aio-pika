@@ -27,5 +27,3 @@ AioPikaBroker parameters:
 * `routing_key` - that used to bind that queue to the exchange.
 * `declare_exchange` - whether you want to declare new exchange if it doesn't exist.
 * `qos` - number of messages that worker can prefetch.
-* `max_connection_pool_size` - maximum number of connections in pool.
-* `max_channel_pool_size` - maximum number of channels for each connection.

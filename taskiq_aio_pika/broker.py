@@ -1,9 +1,13 @@
-from asyncio import AbstractEventLoop
+import asyncio
 from logging import getLogger
-from typing import Any, AsyncGenerator, Callable, Optional, TypeVar
+from typing import Any, Callable, Coroutine, Optional, TypeVar
 
 from aio_pika import ExchangeType, Message, connect_robust
-from aio_pika.abc import AbstractChannel, AbstractRobustConnection
+from aio_pika.abc import (
+    AbstractChannel,
+    AbstractIncomingMessage,
+    AbstractRobustConnection,
+)
 from taskiq.abc.broker import AsyncBroker
 from taskiq.abc.result_backend import AsyncResultBackend
 from taskiq.message import BrokerMessage
@@ -22,9 +26,7 @@ class AioPikaBroker(AsyncBroker):
         result_backend: Optional[AsyncResultBackend[_T]] = None,
         task_id_generator: Optional[Callable[[], str]] = None,
         qos: int = 10,
-        loop: Optional[AbstractEventLoop] = None,
-        max_channel_pool_size: int = 2,
-        max_connection_pool_size: int = 10,
+        loop: Optional[asyncio.AbstractEventLoop] = None,
         exchange_name: str = "taskiq",
         queue_name: str = "taskiq",
         declare_exchange: bool = True,
@@ -42,8 +44,6 @@ class AioPikaBroker(AsyncBroker):
         :param task_id_generator: custom task_id genertaor.
         :param qos: number of messages that worker can prefetch.
         :param loop: specific even loop.
-        :param max_channel_pool_size: maximum number of channels for each connection.
-        :param max_connection_pool_size: maximum number of connections in pool.
         :param exchange_name: name of exchange that used to send messages.
         :param queue_name: queue that used to get incoming messages.
         :param declare_exchange: whether you want to declare new exchange
@@ -112,9 +112,11 @@ class AioPikaBroker(AsyncBroker):
         as the task_name.
 
 
-        :raises ValueError: if startup wasn't awaited.
+        :raises ValueError: if startup wasn't called.
         :param message: message to send.
         """
+        if self.write_channel is None:
+            raise ValueError("Please run startup before kicking.")
         rmq_msg = Message(
             body=message.message.encode(),
             headers={
@@ -123,44 +125,36 @@ class AioPikaBroker(AsyncBroker):
                 **message.labels,
             },
         )
-        if self.write_channel is None:
-            raise ValueError("Please run startup before kicking.")
         exchange = await self.write_channel.get_exchange(
             self._exchange_name,
             ensure=False,
         )
         await exchange.publish(rmq_msg, routing_key=message.task_name)
 
-    async def listen(self) -> AsyncGenerator[BrokerMessage, None]:
+    async def listen(
+        self,
+        callback: Callable[[BrokerMessage], Coroutine[Any, Any, None]],
+    ) -> None:
         """
         Listen to queue.
 
-        This function listens to queue and yields
-        new messages.
+        This function listens to queue and calls
+        callback on every new message.
 
+        :param callback: function to call on new message.
         :raises ValueError: if startup wasn't called.
-        :yield: parsed broker messages.
         """
+        self.callback = callback
         if self.read_channel is None:
             raise ValueError("Call startup before starting listening.")
-        await self.read_channel.set_qos(prefetch_count=0)
+        await self.read_channel.set_qos(prefetch_count=self._qos)
         queue = await self.read_channel.get_queue(self._queue_name, ensure=False)
-        async with queue.iterator() as queue_iter:
-            async for rmq_message in queue_iter:
-                async with rmq_message.process():
-                    try:
-                        yield BrokerMessage(
-                            task_id=rmq_message.headers.pop("task_id"),
-                            task_name=rmq_message.headers.pop("task_name"),
-                            message=rmq_message.body,
-                            labels=rmq_message.headers,
-                        )
-                    except (ValueError, LookupError) as exc:
-                        logger.debug(
-                            "Cannot read broker message %s",
-                            exc,
-                            exc_info=True,
-                        )
+        await queue.consume(self.process_message)
+        try:  # noqa: WPS501
+            # Wait until terminate
+            await asyncio.Future()
+        finally:
+            await self.shutdown()
 
     async def shutdown(self) -> None:
         """Close all connections on shutdown."""
@@ -173,3 +167,29 @@ class AioPikaBroker(AsyncBroker):
             await self.write_conn.close()
         if self.read_conn:
             await self.read_conn.close()
+
+    async def process_message(self, message: AbstractIncomingMessage) -> None:
+        """
+        Process received message.
+
+        This function parses broker message and
+        calls callback.
+
+        :param message: received message.
+        """
+        async with message.process():
+            try:
+                broker_message = BrokerMessage(
+                    task_id=message.headers.pop("task_id"),
+                    task_name=message.headers.pop("task_name"),
+                    message=message.body,
+                    labels=message.headers,
+                )
+            except (ValueError, LookupError) as exc:
+                logger.debug(
+                    "Cannot read broker message %s",
+                    exc,
+                    exc_info=True,
+                )
+                return
+            await self.callback(broker_message)
