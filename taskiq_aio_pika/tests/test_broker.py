@@ -1,11 +1,11 @@
 import asyncio
 import uuid
-from unittest import mock
 
 import pytest
 from aio_pika import Channel, Message
 from aio_pika.abc import AbstractExchange, AbstractQueue
 from aio_pika.exceptions import QueueEmpty
+from mock import AsyncMock
 from taskiq import BrokerMessage
 
 from taskiq_aio_pika.broker import AioPikaBroker
@@ -35,10 +35,10 @@ async def test_kick_success(broker: AioPikaBroker) -> None:
 
     await broker.kick(sent)
 
-    callback = mock.AsyncMock()
+    callback = AsyncMock()
 
     with pytest.raises(asyncio.TimeoutError):
-        await asyncio.wait_for(broker.listen(callback), timeout=0.2)
+        await asyncio.wait_for(broker.listen(callback), timeout=0.4)
     message = callback.call_args_list[0].args[0]
 
     assert message == sent
@@ -100,10 +100,10 @@ async def test_listen(broker: AioPikaBroker, exchange: AbstractExchange) -> None
         routing_key="task_name",
     )
 
-    callback = mock.AsyncMock()
+    callback = AsyncMock()
 
     with pytest.raises(asyncio.TimeoutError):
-        await asyncio.wait_for(broker.listen(callback), timeout=0.2)
+        await asyncio.wait_for(broker.listen(callback), timeout=0.4)
     message = callback.call_args_list[0].args[0]
 
     assert message.message == "test_message"
@@ -129,12 +129,12 @@ async def test_wrong_format(
         Message(b"wrong"),
         routing_key=queue.name,
     )
-    callback = mock.AsyncMock()
+    callback = AsyncMock()
 
     with pytest.raises(asyncio.TimeoutError):
         await asyncio.wait_for(
             broker.listen(callback=callback),
-            0.2,
+            0.4,
         )
 
     with pytest.raises(QueueEmpty):
