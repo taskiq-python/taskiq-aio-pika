@@ -35,6 +35,8 @@ wemake-python-styleguide = "^0.16.1"
 pytest-xdist = { version = "^2.5.0", extras = ["psutil"] }
 anyio = "^3.6.1"
 pytest-cov = "^3.0.0"
+mock = "^4.0.3"
+types-mock = "^4.0.15"
 
 [tool.mypy]
 strict = true
