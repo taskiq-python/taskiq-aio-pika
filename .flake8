@@ -91,6 +91,11 @@ per-file-ignores =
   WPS609,
   ; Found protected attribute usage
   WPS437,
+  ; Found too many await expressions:
+  WPS217,
+  ; Found too many arguments
+  WPS211,
+
 
 exclude =
   ./.git,

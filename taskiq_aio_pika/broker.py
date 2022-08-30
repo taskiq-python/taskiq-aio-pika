@@ -1,8 +1,9 @@
 import asyncio
+from datetime import timedelta
 from logging import getLogger
-from typing import Any, Callable, Coroutine, Optional, TypeVar
+from typing import Any, Callable, Coroutine, Dict, Optional, TypeVar
 
-from aio_pika import ExchangeType, Message, connect_robust
+from aio_pika import DeliveryMode, ExchangeType, Message, connect_robust
 from aio_pika.abc import (
     AbstractChannel,
     AbstractIncomingMessage,
@@ -17,6 +18,26 @@ _T = TypeVar("_T")  # noqa: WPS111
 logger = getLogger("taskiq.aio_pika_broker")
 
 
+def parse_val(
+    parse_func: Callable[[str], _T],
+    target: Optional[str] = None,
+) -> Optional[_T]:
+    """
+    Parse string to some value.
+
+    :param parse_func: function to use if value is present.
+    :param target: value to parse, defaults to None
+    :return: Optional value.
+    """
+    if target is None:
+        return None
+
+    try:
+        return parse_func(target)
+    except ValueError:
+        return None
+
+
 class AioPikaBroker(AsyncBroker):
     """Broker that works with RabbitMQ."""
 
@@ -29,9 +50,12 @@ class AioPikaBroker(AsyncBroker):
         loop: Optional[asyncio.AbstractEventLoop] = None,
         exchange_name: str = "taskiq",
         queue_name: str = "taskiq",
+        dead_letter_queue_name: Optional[str] = None,
+        delay_queue_name: Optional[str] = None,
         declare_exchange: bool = True,
         routing_key: str = "#",
         exchange_type: ExchangeType = ExchangeType.TOPIC,
+        max_priority: Optional[int] = None,
         **connection_kwargs: Any,
     ) -> None:
         """
@@ -46,11 +70,16 @@ class AioPikaBroker(AsyncBroker):
         :param loop: specific even loop.
         :param exchange_name: name of exchange that used to send messages.
         :param queue_name: queue that used to get incoming messages.
+        :param dead_letter_queue_name: custom name for dead-letter queue.
+            by default it set to {queue_name}.dead_letter.
+        :param delay_queue_name: custom name for queue that used to
+            deliver messages with delays.
         :param declare_exchange: whether you want to declare new exchange
             if it doesn't exist.
         :param routing_key: that used to bind that queue to the exchange.
         :param exchange_type: type of the exchange.
             Used only if `declare_exchange` is True.
+        :param max_priority: maximum priority value for messages.
         :param connection_kwargs: additional keyword arguments,
             for connect_robust method of aio-pika.
         """
@@ -65,6 +94,16 @@ class AioPikaBroker(AsyncBroker):
         self._declare_exchange = declare_exchange
         self._queue_name = queue_name
         self._routing_key = routing_key
+        self._max_priority = max_priority
+
+        self._dead_letter_queue_name = f"{queue_name}.dead_letter"
+        if dead_letter_queue_name:
+            self._dead_letter_queue_name = dead_letter_queue_name
+
+        self._delay_queue_name = f"{queue_name}.delay"
+        if delay_queue_name:
+            self._delay_queue_name = delay_queue_name
+
         self.read_conn: Optional[AbstractRobustConnection] = None
         self.write_conn: Optional[AbstractRobustConnection] = None
         self.write_channel: Optional[AbstractChannel] = None
@@ -97,7 +136,26 @@ class AioPikaBroker(AsyncBroker):
                 self._exchange_name,
                 ensure=False,
             )
-        queue = await self.write_channel.declare_queue(self._queue_name)
+        await self.write_channel.declare_queue(
+            self._dead_letter_queue_name,
+        )
+        args: "Dict[str, Any]" = {
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": self._dead_letter_queue_name,
+        }
+        if self._max_priority is not None:
+            args["x-max-priority"] = self._max_priority
+        queue = await self.write_channel.declare_queue(
+            self._queue_name,
+            arguments=args,
+        )
+        await self.write_channel.declare_queue(
+            self._delay_queue_name,
+            arguments={
+                "x-dead-letter-exchange": "",
+                "x-dead-letter-routing-key": self._queue_name,
+            },
+        )
         await queue.bind(exchange=exchange, routing_key=self._routing_key)
 
     async def kick(self, message: BrokerMessage) -> None:
@@ -111,12 +169,12 @@ class AioPikaBroker(AsyncBroker):
         in headers. And message's routing key is the same
         as the task_name.
 
-
         :raises ValueError: if startup wasn't called.
         :param message: message to send.
         """
         if self.write_channel is None:
             raise ValueError("Please run startup before kicking.")
+        priority = parse_val(int, message.labels.get("priority"))
         rmq_msg = Message(
             body=message.message.encode(),
             headers={
@@ -124,12 +182,22 @@ class AioPikaBroker(AsyncBroker):
                 "task_name": message.task_name,
                 **message.labels,
             },
+            delivery_mode=DeliveryMode.PERSISTENT,
+            priority=priority,
         )
-        exchange = await self.write_channel.get_exchange(
-            self._exchange_name,
-            ensure=False,
-        )
-        await exchange.publish(rmq_msg, routing_key=message.task_name)
+        delay = parse_val(int, message.labels.get("delay"))
+        if delay is None:
+            exchange = await self.write_channel.get_exchange(
+                self._exchange_name,
+                ensure=False,
+            )
+            await exchange.publish(rmq_msg, routing_key=message.task_name)
+        else:
+            rmq_msg.expiration = timedelta(seconds=delay)
+            await self.write_channel.default_exchange.publish(
+                rmq_msg,
+                routing_key=self._delay_queue_name,
+            )
 
     async def listen(
         self,
@@ -178,15 +246,18 @@ class AioPikaBroker(AsyncBroker):
         :param message: received message.
         """
         async with message.process():
+            headers = {}
+            for header_name, header_value in message.headers.items():
+                headers[header_name] = str(header_value)
             try:
                 broker_message = BrokerMessage(
-                    task_id=message.headers.pop("task_id"),
-                    task_name=message.headers.pop("task_name"),
+                    task_id=headers.pop("task_id"),
+                    task_name=headers.pop("task_name"),
                     message=message.body,
-                    labels=message.headers,
+                    labels=headers,
                 )
             except (ValueError, LookupError) as exc:
-                logger.debug(
+                logger.warning(
                     "Cannot read broker message %s",
                     exc,
                     exc_info=True,
