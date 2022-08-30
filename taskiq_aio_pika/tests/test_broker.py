@@ -3,7 +3,6 @@ import uuid
 
 import pytest
 from aio_pika import Channel, Message
-from aio_pika.abc import AbstractExchange, AbstractQueue
 from aio_pika.exceptions import QueueEmpty
 from mock import AsyncMock
 from taskiq import BrokerMessage
@@ -45,10 +44,8 @@ async def test_kick_success(broker: AioPikaBroker) -> None:
 
 
 @pytest.mark.anyio
-async def test_startup(  # noqa: WPS211
+async def test_startup(
     broker: AioPikaBroker,
-    queue: AbstractQueue,
-    exchange: AbstractExchange,
     test_channel: Channel,
     queue_name: str,
     exchange_name: str,
@@ -61,12 +58,12 @@ async def test_startup(  # noqa: WPS211
     exist.
 
     :param broker: current broker.
-    :param queue: test queue.
-    :param exchange: test exchange.
     :param test_channel: test channel.
     :param queue_name: name of the queue.
     :param exchange_name: name of the test exchange.
     """
+    queue = await test_channel.get_queue(queue_name)
+    exchange = await test_channel.get_exchange(exchange_name)
     await queue.delete()
     await exchange.delete()
     broker._declare_exchange = True
@@ -78,7 +75,11 @@ async def test_startup(  # noqa: WPS211
 
 
 @pytest.mark.anyio
-async def test_listen(broker: AioPikaBroker, exchange: AbstractExchange) -> None:
+async def test_listen(
+    broker: AioPikaBroker,
+    test_channel: Channel,
+    exchange_name: str,
+) -> None:
     """
     Test that message are read correctly.
 
@@ -86,8 +87,10 @@ async def test_listen(broker: AioPikaBroker, exchange: AbstractExchange) -> None
     correctly and listen can be iterated.
 
     :param broker: current broker.
-    :param exchange: current exchange.
+    :param test_channel: amqp channel.
+    :param exchange_name: main exchange name.
     """
+    exchange = await test_channel.get_exchange(exchange_name)
     await exchange.publish(
         Message(
             b"test_message",
@@ -115,19 +118,20 @@ async def test_listen(broker: AioPikaBroker, exchange: AbstractExchange) -> None
 @pytest.mark.anyio
 async def test_wrong_format(
     broker: AioPikaBroker,
-    queue: AbstractQueue,
+    queue_name: str,
     test_channel: Channel,
 ) -> None:
     """
     Tests that messages with wrong format are ignored.
 
     :param broker: aio-pika broker.
-    :param queue: test queue.
+    :param queue_name: test queue name.
     :param test_channel: test channel.
     """
+    queue = await test_channel.get_queue(queue_name)
     await test_channel.default_exchange.publish(
         Message(b"wrong"),
-        routing_key=queue.name,
+        routing_key=queue_name,
     )
     callback = AsyncMock()
 
@@ -139,3 +143,49 @@ async def test_wrong_format(
 
     with pytest.raises(QueueEmpty):
         await queue.get()
+
+
+@pytest.mark.anyio
+async def test_delayed_message(
+    broker: AioPikaBroker,
+    test_channel: Channel,
+    queue_name: str,
+    delay_queue_name: str,
+) -> None:
+    """
+    Test that delayed messages are delivered correctly.
+
+    This test send message with delay label,
+    checks that this message appears in delay queue.
+    After that it waits specified delay period and
+    checks that message was transfered to the main queue.
+
+    :param broker: current broker.
+    :param test_channel: amqp channel for tests.
+    :param queue_name: test queue name.
+    :param delay_queue_name: name of the test queue for delayed messages.
+    """
+    delay_queue = await test_channel.get_queue(delay_queue_name)
+    main_queue = await test_channel.get_queue(queue_name)
+    broker_msg = BrokerMessage(
+        task_id="1",
+        task_name="name",
+        message="message",
+        labels={"delay": "2"},
+    )
+    await broker.kick(broker_msg)
+
+    # We check that message appears in delay queue.
+    delay_msg = await delay_queue.get()
+    await delay_msg.nack(requeue=True)  # type: ignore
+
+    # After we wait the delay message must appear in
+    # the main queue.
+    await asyncio.sleep(2)
+
+    # Check that it disappear.
+    with pytest.raises(QueueEmpty):
+        await delay_queue.get(no_ack=True)
+
+    # Check that we can get the message.
+    await main_queue.get()
