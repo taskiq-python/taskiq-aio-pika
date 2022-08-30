@@ -3,14 +3,8 @@ from typing import AsyncGenerator
 from uuid import uuid4
 
 import pytest
-from aio_pika import Channel, ExchangeType, connect_robust
-from aio_pika.abc import (
-    AbstractChannel,
-    AbstractExchange,
-    AbstractQueue,
-    AbstractRobustConnection,
-)
-from aiormq import ChannelNotFoundEntity
+from aio_pika import Channel, connect_robust
+from aio_pika.abc import AbstractChannel, AbstractRobustConnection
 
 from taskiq_aio_pika.broker import AioPikaBroker
 
@@ -44,6 +38,26 @@ def queue_name() -> str:
     Generated queue name.
 
     :return: random queue name.
+    """
+    return uuid4().hex
+
+
+@pytest.fixture
+def delay_queue_name() -> str:
+    """
+    Generated name for delay queue.
+
+    :return: random exchange name.
+    """
+    return uuid4().hex
+
+
+@pytest.fixture
+def dead_queue_name() -> str:
+    """
+    Generated name for dead letter queue.
+
+    :return: random exchange name.
     """
     return uuid4().hex
 
@@ -90,72 +104,13 @@ async def test_channel(
 
 
 @pytest.fixture
-async def exchange(
-    test_channel: Channel,
-    exchange_name: str,
-) -> AsyncGenerator[AbstractExchange, None]:
-    """
-    Create test exchange.
-
-    This fixture declares exchange,
-    and deletes it after test is complete.
-
-    :param test_channel: current channel.
-    :param exchange_name: name of the test exchange.
-    :yield: exchange.
-    """
-    exchange = await test_channel.declare_exchange(
-        exchange_name,
-        type=ExchangeType.TOPIC,
-    )
-
-    yield exchange
-
-    try:
-        await exchange.delete(
-            timeout=1,
-            if_unused=False,
-        )
-    except ChannelNotFoundEntity:  # pragma: no cover
-        pass  # noqa: WPS420
-
-
-@pytest.fixture
-async def queue(
-    test_channel: Channel,
-    queue_name: str,
-) -> AsyncGenerator[AbstractQueue, None]:
-    """
-    Create test queue.
-
-    This fixture declares queue,
-    and deletes it after test is complete.
-
-    :param test_channel: current channel.
-    :param queue_name: name of the test queue.
-    :yield: queue.
-    """
-    queue = await test_channel.declare_queue(queue_name)
-
-    yield queue
-
-    try:
-        await queue.delete(
-            timeout=1,
-            if_empty=False,
-            if_unused=False,
-        )
-    except ChannelNotFoundEntity:  # pragma: no cover
-        pass  # noqa: WPS420
-
-
-@pytest.fixture
 async def broker(
     amqp_url: str,
     queue_name: str,
+    delay_queue_name: str,
+    dead_queue_name: str,
     exchange_name: str,
-    queue: AbstractQueue,
-    exchange: AbstractExchange,
+    test_channel: Channel,
 ) -> AsyncGenerator[AioPikaBroker, None]:
     """
     Yields new broker instance.
@@ -165,16 +120,19 @@ async def broker(
     and shutdown after test.
 
     :param amqp_url: current rabbitmq connection string.
+    :param test_channel: amqp channel for tests.
     :param queue_name: test queue name.
+    :param delay_queue_name: test delay queue name.
+    :param dead_queue_name: test dead letter queue name.
     :param exchange_name: test exchange name.
-    :param queue: declared queue.
-    :param exchange: declared exchange.
     :yield: broker.
     """
     broker = AioPikaBroker(
         url=amqp_url,
-        declare_exchange=False,
+        declare_exchange=True,
         exchange_name=exchange_name,
+        dead_letter_queue_name=dead_queue_name,
+        delay_queue_name=delay_queue_name,
         queue_name=queue_name,
     )
     broker.is_worker_process = True
@@ -184,3 +142,16 @@ async def broker(
     yield broker
 
     await broker.shutdown()
+
+    exchange = await test_channel.get_exchange(exchange_name)
+    await exchange.delete(
+        timeout=1,
+        if_unused=False,
+    )
+    for i_queue_name in (queue_name, delay_queue_name, dead_queue_name):
+        queue = await test_channel.get_queue(i_queue_name, ensure=False)
+        await queue.delete(
+            timeout=1,
+            if_empty=False,
+            if_unused=False,
+        )
