@@ -41,7 +41,7 @@ repos:
         language: system
         pass_filenames: false
         types: [ python ]
-        args: [--count, .]
+        args: [--count, taskiq_aio_pika]
 
       - id: mypy
         name: Validate types with MyPy

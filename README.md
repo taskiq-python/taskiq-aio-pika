@@ -99,3 +99,5 @@ AioPikaBroker parameters:
 * `dead_letter_queue_name` - custom dead letter queue name.
     This queue is used to receive negatively acknowleged messages from the main queue.
 * `qos` - number of messages that worker can prefetch.
+* `declare_queues` - whether you want to declare queues even on
+    client side. May be useful for message persistance.
