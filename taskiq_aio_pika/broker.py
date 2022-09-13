@@ -7,6 +7,7 @@ from aio_pika import DeliveryMode, ExchangeType, Message, connect_robust
 from aio_pika.abc import (
     AbstractChannel,
     AbstractIncomingMessage,
+    AbstractQueue,
     AbstractRobustConnection,
 )
 from taskiq.abc.broker import AsyncBroker
@@ -53,6 +54,7 @@ class AioPikaBroker(AsyncBroker):
         dead_letter_queue_name: Optional[str] = None,
         delay_queue_name: Optional[str] = None,
         declare_exchange: bool = True,
+        declare_queues: bool = True,
         routing_key: str = "#",
         exchange_type: ExchangeType = ExchangeType.TOPIC,
         max_priority: Optional[int] = None,
@@ -76,6 +78,8 @@ class AioPikaBroker(AsyncBroker):
             deliver messages with delays.
         :param declare_exchange: whether you want to declare new exchange
             if it doesn't exist.
+        :param declare_queues: whether you want to declare queues even on
+            client side. May be useful for message persistance.
         :param routing_key: that used to bind that queue to the exchange.
         :param exchange_type: type of the exchange.
             Used only if `declare_exchange` is True.
@@ -92,6 +96,7 @@ class AioPikaBroker(AsyncBroker):
         self._exchange_type = exchange_type
         self._qos = qos
         self._declare_exchange = declare_exchange
+        self._declare_queues = declare_queues
         self._queue_name = queue_name
         self._routing_key = routing_key
         self._max_priority = max_priority
@@ -127,16 +132,29 @@ class AioPikaBroker(AsyncBroker):
             self.read_channel = await self.read_conn.channel()
 
         if self._declare_exchange:
-            exchange = await self.write_channel.declare_exchange(
+            await self.write_channel.declare_exchange(
                 self._exchange_name,
                 type=self._exchange_type,
             )
-        else:
-            exchange = await self.write_channel.get_exchange(
-                self._exchange_name,
-                ensure=False,
-            )
-        await self.write_channel.declare_queue(
+        if self._declare_queues:
+            await self.declare_queues(self.write_channel)
+
+    async def declare_queues(
+        self,
+        channel: AbstractChannel,
+    ) -> AbstractQueue:
+        """
+        This function is used to declare queues.
+
+        It's useful since aio-pika have automatic
+        recover mechanism, which works only if
+        the queue, you're going to listen was
+        declared by aio-pika.
+
+        :param channel: channel to used for declaration.
+        :return: main queue instance.
+        """
+        await channel.declare_queue(
             self._dead_letter_queue_name,
         )
         args: "Dict[str, Any]" = {
@@ -145,18 +163,19 @@ class AioPikaBroker(AsyncBroker):
         }
         if self._max_priority is not None:
             args["x-max-priority"] = self._max_priority
-        queue = await self.write_channel.declare_queue(
+        queue = await channel.declare_queue(
             self._queue_name,
             arguments=args,
         )
-        await self.write_channel.declare_queue(
+        await channel.declare_queue(
             self._delay_queue_name,
             arguments={
                 "x-dead-letter-exchange": "",
                 "x-dead-letter-routing-key": self._queue_name,
             },
         )
-        await queue.bind(exchange=exchange, routing_key=self._routing_key)
+        await queue.bind(exchange=self._exchange_name, routing_key=self._routing_key)
+        return queue
 
     async def kick(self, message: BrokerMessage) -> None:
         """
@@ -216,7 +235,7 @@ class AioPikaBroker(AsyncBroker):
         if self.read_channel is None:
             raise ValueError("Call startup before starting listening.")
         await self.read_channel.set_qos(prefetch_count=self._qos)
-        queue = await self.read_channel.get_queue(self._queue_name, ensure=False)
+        queue = await self.declare_queues(self.read_channel)
         await queue.consume(self.process_message)
         try:  # noqa: WPS501
             # Wait until terminate
