@@ -116,6 +116,7 @@ class AioPikaBroker(AsyncBroker):
 
     async def startup(self) -> None:  # noqa: WPS217
         """Create exchange and queue on startup."""
+        await super().startup()
         self.write_conn = await connect_robust(
             self.url,
             loop=self._loop,
