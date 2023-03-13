@@ -4,10 +4,20 @@ import uuid
 import pytest
 from aio_pika import Channel, Message
 from aio_pika.exceptions import QueueEmpty
-from mock import AsyncMock
 from taskiq import BrokerMessage
 
 from taskiq_aio_pika.broker import AioPikaBroker
+
+
+async def get_first_task(broker: AioPikaBroker) -> BrokerMessage:  # type: ignore
+    """
+    Get first message from the queue.
+
+    :param broker: async message broker.
+    :return: first message from listen method
+    """
+    async for message in broker.listen():
+        return message
 
 
 @pytest.mark.anyio
@@ -34,11 +44,7 @@ async def test_kick_success(broker: AioPikaBroker) -> None:
 
     await broker.kick(sent)
 
-    callback = AsyncMock()
-
-    with pytest.raises(asyncio.TimeoutError):
-        await asyncio.wait_for(broker.listen(callback), timeout=0.4)
-    message = callback.call_args_list[0].args[0]
+    message = await asyncio.wait_for(get_first_task(broker), timeout=0.4)
 
     assert message == sent
 
@@ -103,11 +109,7 @@ async def test_listen(
         routing_key="task_name",
     )
 
-    callback = AsyncMock()
-
-    with pytest.raises(asyncio.TimeoutError):
-        await asyncio.wait_for(broker.listen(callback), timeout=0.4)
-    message = callback.call_args_list[0].args[0]
+    message = await asyncio.wait_for(get_first_task(broker), timeout=0.4)
 
     assert message.message == "test_message"
     assert message.labels == {"label1": "label_val"}
@@ -133,13 +135,9 @@ async def test_wrong_format(
         Message(b"wrong"),
         routing_key=queue_name,
     )
-    callback = AsyncMock()
 
     with pytest.raises(asyncio.TimeoutError):
-        await asyncio.wait_for(
-            broker.listen(callback=callback),
-            0.4,
-        )
+        await asyncio.wait_for(get_first_task(broker), 0.4)
 
     with pytest.raises(QueueEmpty):
         await queue.get()
