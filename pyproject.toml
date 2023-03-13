@@ -19,7 +19,7 @@ keywords = ["taskiq", "tasks", "distributed", "async", "aio-pika"]
 
 [tool.poetry.dependencies]
 python = "^3.7"
-taskiq = "^0"
+taskiq = "^0.2.0"
 aio-pika = "^8.1.0"
 
 [tool.poetry.dev-dependencies]
