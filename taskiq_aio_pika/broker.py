@@ -1,15 +1,10 @@
 import asyncio
 from datetime import timedelta
 from logging import getLogger
-from typing import Any, Callable, Coroutine, Dict, Optional, TypeVar
+from typing import Any, AsyncGenerator, Callable, Dict, Optional, TypeVar
 
 from aio_pika import DeliveryMode, ExchangeType, Message, connect_robust
-from aio_pika.abc import (
-    AbstractChannel,
-    AbstractIncomingMessage,
-    AbstractQueue,
-    AbstractRobustConnection,
-)
+from aio_pika.abc import AbstractChannel, AbstractQueue, AbstractRobustConnection
 from taskiq.abc.broker import AsyncBroker
 from taskiq.abc.result_backend import AsyncResultBackend
 from taskiq.message import BrokerMessage
@@ -219,30 +214,42 @@ class AioPikaBroker(AsyncBroker):
                 routing_key=self._delay_queue_name,
             )
 
-    async def listen(
-        self,
-        callback: Callable[[BrokerMessage], Coroutine[Any, Any, None]],
-    ) -> None:
+    async def listen(self) -> AsyncGenerator[BrokerMessage, None]:  # noqa: WPS210
         """
         Listen to queue.
 
-        This function listens to queue and calls
-        callback on every new message.
+        This function listens to queue and
+        yields every new message.
 
-        :param callback: function to call on new message.
+        :yields: parsed broker message.
         :raises ValueError: if startup wasn't called.
         """
-        self.callback = callback
         if self.read_channel is None:
             raise ValueError("Call startup before starting listening.")
         await self.read_channel.set_qos(prefetch_count=self._qos)
         queue = await self.declare_queues(self.read_channel)
-        await queue.consume(self.process_message)
-        try:  # noqa: WPS501
-            # Wait until terminate
-            await asyncio.Future()
-        finally:
-            await self.shutdown()
+        async with queue.iterator() as iterator:
+            async for message in iterator:
+                async with message.process():
+                    headers = {}
+                    for header_name, header_value in message.headers.items():
+                        headers[header_name] = str(header_value)
+                    try:
+                        broker_message = BrokerMessage(
+                            task_id=headers.pop("task_id"),
+                            task_name=headers.pop("task_name"),
+                            message=message.body,
+                            labels=headers,
+                        )
+                    except (ValueError, LookupError) as exc:
+                        logger.warning(
+                            "Cannot read broker message %s",
+                            exc,
+                            exc_info=True,
+                        )
+                        continue
+
+                    yield broker_message
 
     async def shutdown(self) -> None:
         """Close all connections on shutdown."""
@@ -255,32 +262,3 @@ class AioPikaBroker(AsyncBroker):
             await self.write_conn.close()
         if self.read_conn:
             await self.read_conn.close()
-
-    async def process_message(self, message: AbstractIncomingMessage) -> None:
-        """
-        Process received message.
-
-        This function parses broker message and
-        calls callback.
-
-        :param message: received message.
-        """
-        async with message.process():
-            headers = {}
-            for header_name, header_value in message.headers.items():
-                headers[header_name] = str(header_value)
-            try:
-                broker_message = BrokerMessage(
-                    task_id=headers.pop("task_id"),
-                    task_name=headers.pop("task_name"),
-                    message=message.body,
-                    labels=headers,
-                )
-            except (ValueError, LookupError) as exc:
-                logger.warning(
-                    "Cannot read broker message %s",
-                    exc,
-                    exc_info=True,
-                )
-                return
-            await self.callback(broker_message)
