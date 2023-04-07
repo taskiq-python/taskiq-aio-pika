@@ -9,7 +9,7 @@ from taskiq import BrokerMessage
 from taskiq_aio_pika.broker import AioPikaBroker
 
 
-async def get_first_task(broker: AioPikaBroker) -> BrokerMessage:  # type: ignore
+async def get_first_task(broker: AioPikaBroker) -> bytes:  # type: ignore
     """
     Get first message from the queue.
 
@@ -36,7 +36,7 @@ async def test_kick_success(broker: AioPikaBroker) -> None:
     sent = BrokerMessage(
         task_id=task_id,
         task_name=task_name,
-        message="my_msg",
+        message=b"my_msg",
         labels={
             "label1": "val1",
         },
@@ -46,7 +46,7 @@ async def test_kick_success(broker: AioPikaBroker) -> None:
 
     message = await asyncio.wait_for(get_first_task(broker), timeout=0.4)
 
-    assert message == sent
+    assert message == sent.message
 
 
 @pytest.mark.anyio
@@ -111,10 +111,7 @@ async def test_listen(
 
     message = await asyncio.wait_for(get_first_task(broker), timeout=0.4)
 
-    assert message.message == "test_message"
-    assert message.labels == {"label1": "label_val"}
-    assert message.task_id == "test_id"
-    assert message.task_name == "task_name"
+    assert message == b"test_message"
 
 
 @pytest.mark.anyio
@@ -124,7 +121,7 @@ async def test_wrong_format(
     test_channel: Channel,
 ) -> None:
     """
-    Tests that messages with wrong format are ignored.
+    Tests that messages with wrong format are still received.
 
     :param broker: aio-pika broker.
     :param queue_name: test queue name.
@@ -136,8 +133,9 @@ async def test_wrong_format(
         routing_key=queue_name,
     )
 
-    with pytest.raises(asyncio.TimeoutError):
-        await asyncio.wait_for(get_first_task(broker), 0.4)
+    msg_bytes = await asyncio.wait_for(get_first_task(broker), 0.4)
+
+    assert msg_bytes == b"wrong"
 
     with pytest.raises(QueueEmpty):
         await queue.get()
@@ -168,7 +166,7 @@ async def test_delayed_message(
     broker_msg = BrokerMessage(
         task_id="1",
         task_name="name",
-        message="message",
+        message=b"message",
         labels={"delay": "2"},
     )
     await broker.kick(broker_msg)

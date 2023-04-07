@@ -191,7 +191,7 @@ class AioPikaBroker(AsyncBroker):
             raise ValueError("Please run startup before kicking.")
         priority = parse_val(int, message.labels.get("priority"))
         rmq_msg = Message(
-            body=message.message.encode(),
+            body=message.message,
             headers={
                 "task_id": message.task_id,
                 "task_name": message.task_name,
@@ -214,7 +214,7 @@ class AioPikaBroker(AsyncBroker):
                 routing_key=self._delay_queue_name,
             )
 
-    async def listen(self) -> AsyncGenerator[BrokerMessage, None]:  # noqa: WPS210
+    async def listen(self) -> AsyncGenerator[bytes, None]:
         """
         Listen to queue.
 
@@ -231,25 +231,7 @@ class AioPikaBroker(AsyncBroker):
         async with queue.iterator() as iterator:
             async for message in iterator:
                 async with message.process():
-                    headers = {}
-                    for header_name, header_value in message.headers.items():
-                        headers[header_name] = str(header_value)
-                    try:
-                        broker_message = BrokerMessage(
-                            task_id=headers.pop("task_id"),
-                            task_name=headers.pop("task_name"),
-                            message=message.body,
-                            labels=headers,
-                        )
-                    except (ValueError, LookupError) as exc:
-                        logger.warning(
-                            "Cannot read broker message %s",
-                            exc,
-                            exc_info=True,
-                        )
-                        continue
-
-                    yield broker_message
+                    yield message.body
 
     async def shutdown(self) -> None:
         """Close all connections on shutdown."""
