@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "taskiq-aio-pika"
-version = "0.1.1"
+version = "0.2.0"
 description = "RabbitMQ broker for taskiq"
 authors = ["Pavel Kirilin <win10@list.ru>"]
 readme = "README.md"
