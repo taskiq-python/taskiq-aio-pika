@@ -53,6 +53,7 @@ class AioPikaBroker(AsyncBroker):
         routing_key: str = "#",
         exchange_type: ExchangeType = ExchangeType.TOPIC,
         max_priority: Optional[int] = None,
+        delayed_message_exchange_plugin: bool = False,
         **connection_kwargs: Any,
     ) -> None:
         """
@@ -79,6 +80,8 @@ class AioPikaBroker(AsyncBroker):
         :param exchange_type: type of the exchange.
             Used only if `declare_exchange` is True.
         :param max_priority: maximum priority value for messages.
+        :param delayed_message_exchange_plugin: turn on or disable
+            delayed-message-exchange rabbitmq plugin.
         :param connection_kwargs: additional keyword arguments,
             for connect_robust method of aio-pika.
         """
@@ -95,6 +98,7 @@ class AioPikaBroker(AsyncBroker):
         self._queue_name = queue_name
         self._routing_key = routing_key
         self._max_priority = max_priority
+        self._delayed_message_exchange_plugin = delayed_message_exchange_plugin
 
         self._dead_letter_queue_name = f"{queue_name}.dead_letter"
         if dead_letter_queue_name:
@@ -103,6 +107,8 @@ class AioPikaBroker(AsyncBroker):
         self._delay_queue_name = f"{queue_name}.delay"
         if delay_queue_name:
             self._delay_queue_name = delay_queue_name
+
+        self._delay_plugin_exchange_name = f"{exchange_name}.plugin_delay"
 
         self.read_conn: Optional[AbstractRobustConnection] = None
         self.write_conn: Optional[AbstractRobustConnection] = None
@@ -132,8 +138,30 @@ class AioPikaBroker(AsyncBroker):
                 self._exchange_name,
                 type=self._exchange_type,
             )
+
+        if self._delayed_message_exchange_plugin:
+            await self.write_channel.declare_exchange(
+                self._delay_plugin_exchange_name,
+                type=ExchangeType.X_DELAYED_MESSAGE,
+                arguments={
+                    "x-delayed-type": "direct",
+                },
+            )
+
         if self._declare_queues:
             await self.declare_queues(self.write_channel)
+
+    async def shutdown(self) -> None:
+        """Close all connections on shutdown."""
+        await super().shutdown()
+        if self.write_channel:
+            await self.write_channel.close()
+        if self.read_channel:
+            await self.read_channel.close()
+        if self.write_conn:
+            await self.write_conn.close()
+        if self.read_conn:
+            await self.read_conn.close()
 
     async def declare_queues(
         self,
@@ -163,14 +191,24 @@ class AioPikaBroker(AsyncBroker):
             self._queue_name,
             arguments=args,
         )
-        await channel.declare_queue(
-            self._delay_queue_name,
-            arguments={
-                "x-dead-letter-exchange": "",
-                "x-dead-letter-routing-key": self._queue_name,
-            },
+        if self._delayed_message_exchange_plugin:
+            await queue.bind(
+                exchange=self._delay_plugin_exchange_name,
+                routing_key=self._routing_key,
+            )
+        else:
+            await channel.declare_queue(
+                self._delay_queue_name,
+                arguments={
+                    "x-dead-letter-exchange": "",
+                    "x-dead-letter-routing-key": self._queue_name,
+                },
+            )
+
+        await queue.bind(
+            exchange=self._exchange_name,
+            routing_key=self._routing_key,
         )
-        await queue.bind(exchange=self._exchange_name, routing_key=self._routing_key)
         return queue
 
     async def kick(self, message: BrokerMessage) -> None:
@@ -189,30 +227,47 @@ class AioPikaBroker(AsyncBroker):
         """
         if self.write_channel is None:
             raise ValueError("Please run startup before kicking.")
-        priority = parse_val(int, message.labels.get("priority"))
-        rmq_msg = Message(
-            body=message.message,
-            headers={
+
+        message_base_params: dict[str, Any] = {
+            "body": message.message,
+            "headers": {
                 "task_id": message.task_id,
                 "task_name": message.task_name,
                 **message.labels,
             },
-            delivery_mode=DeliveryMode.PERSISTENT,
-            priority=priority,
+            "delivery_mode": DeliveryMode.PERSISTENT,
+        }
+
+        message_base_params["priority"] = parse_val(
+            int,
+            message.labels.get("priority"),
         )
-        delay = parse_val(int, message.labels.get("delay"))
+
+        delay: Optional[int] = parse_val(int, message.labels.get("delay"))
+        rmq_message: Message = Message(**message_base_params)
+
         if delay is None:
             exchange = await self.write_channel.get_exchange(
                 self._exchange_name,
                 ensure=False,
             )
-            await exchange.publish(rmq_msg, routing_key=message.task_name)
+            await exchange.publish(rmq_message, routing_key=message.task_name)
         else:
-            rmq_msg.expiration = timedelta(seconds=delay)
-            await self.write_channel.default_exchange.publish(
-                rmq_msg,
-                routing_key=self._delay_queue_name,
-            )
+            if self._delayed_message_exchange_plugin:
+                rmq_message.headers["x-delay"] = delay * 1000
+                exchange = await self.write_channel.get_exchange(
+                    self._delay_plugin_exchange_name,
+                )
+                await exchange.publish(
+                    rmq_message,
+                    routing_key=self._routing_key,
+                )
+            else:
+                rmq_message.expiration = timedelta(seconds=delay)
+                await self.write_channel.default_exchange.publish(
+                    rmq_message,
+                    routing_key=self._delay_queue_name,
+                )
 
     async def listen(self) -> AsyncGenerator[bytes, None]:
         """
@@ -232,15 +287,3 @@ class AioPikaBroker(AsyncBroker):
             async for message in iterator:
                 async with message.process():
                     yield message.body
-
-    async def shutdown(self) -> None:
-        """Close all connections on shutdown."""
-        await super().shutdown()
-        if self.write_channel:
-            await self.write_channel.close()
-        if self.read_channel:
-            await self.read_channel.close()
-        if self.write_conn:
-            await self.write_conn.close()
-        if self.read_conn:
-            await self.read_conn.close()

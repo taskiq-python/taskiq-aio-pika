@@ -43,6 +43,16 @@ def queue_name() -> str:
 
 
 @pytest.fixture
+def routing_key() -> str:
+    """
+    Generated routing key.
+
+    :return: random routing key.
+    """
+    return uuid4().hex
+
+
+@pytest.fixture
 def delay_queue_name() -> str:
     """
     Generated name for delay queue.
@@ -145,6 +155,70 @@ async def broker(
 
     exchange = await test_channel.get_exchange(exchange_name)
     await exchange.delete(
+        timeout=1,
+        if_unused=False,
+    )
+    for i_queue_name in (queue_name, delay_queue_name, dead_queue_name):
+        queue = await test_channel.get_queue(i_queue_name, ensure=False)
+        await queue.delete(
+            timeout=1,
+            if_empty=False,
+            if_unused=False,
+        )
+
+
+@pytest.fixture
+async def broker_with_delayed_message_plugin(
+    amqp_url: str,
+    queue_name: str,
+    delay_queue_name: str,
+    dead_queue_name: str,
+    exchange_name: str,
+    routing_key: str,
+    test_channel: Channel,
+) -> AsyncGenerator[AioPikaBroker, None]:
+    """
+    Yields new broker instance.
+
+    This function is used to
+    create broker, run startup,
+    and shutdown after test.
+
+    :param amqp_url: current rabbitmq connection string.
+    :param test_channel: amqp channel for tests.
+    :param queue_name: test queue name.
+    :param delay_queue_name: test delay queue name.
+    :param dead_queue_name: test dead letter queue name.
+    :param exchange_name: test exchange name.
+    :param routing_key: routing_key.
+    :yield: broker.
+    """
+    broker = AioPikaBroker(
+        url=amqp_url,
+        declare_exchange=True,
+        exchange_name=exchange_name,
+        dead_letter_queue_name=dead_queue_name,
+        queue_name=queue_name,
+        delayed_message_exchange_plugin=True,
+        routing_key=routing_key,
+    )
+    broker.is_worker_process = True
+
+    await broker.startup()
+
+    yield broker
+
+    await broker.shutdown()
+
+    exchange = await test_channel.get_exchange(exchange_name)
+    await exchange.delete(
+        timeout=1,
+        if_unused=False,
+    )
+    plugin_exchange = await test_channel.get_exchange(
+        broker._delay_plugin_exchange_name,
+    )
+    await plugin_exchange.delete(
         timeout=1,
         if_unused=False,
     )
