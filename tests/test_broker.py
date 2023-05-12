@@ -173,7 +173,7 @@ async def test_delayed_message(
 
     # We check that message appears in delay queue.
     delay_msg = await delay_queue.get()
-    await delay_msg.nack(requeue=True)  # type: ignore
+    await delay_msg.nack(requeue=True)
 
     # After we wait the delay message must appear in
     # the main queue.
