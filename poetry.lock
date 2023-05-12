@@ -2,34 +2,32 @@
 
 [[package]]
 name = "aio-pika"
-version = "8.3.0"
-description = "Wrapper for the aiormq for asyncio and humans."
+version = "9.0.7"
+description = "Wrapper around the aiormq for asyncio and humans"
 category = "main"
 optional = false
-python-versions = ">3.6, <4"
+python-versions = ">=3.7,<4.0"
 files = [
-    {file = "aio-pika-8.3.0.tar.gz", hash = "sha256:c0e2601eda6a1097fe1d33c5f9965a86a27b328ac48914d20c23f675b3ab1797"},
-    {file = "aio_pika-8.3.0-py3-none-any.whl", hash = "sha256:36c4742449f1cbcb83165b3733b090cf88f3d2f7f027225eedb8c7f300b05dde"},
+    {file = "aio_pika-9.0.7-py3-none-any.whl", hash = "sha256:f53059edeed5b24af5df1213014c7bef9b8200930c7527a1125b408f93a8d3a6"},
+    {file = "aio_pika-9.0.7.tar.gz", hash = "sha256:e89fc7a60c1294260defc3ec8eda5d9d75a886a3855192914baf34ab0a0fada9"},
 ]
 
 [package.dependencies]
-aiormq = ">=6.6.3,<6.7.0"
-typing-extensions = {version = "*", markers = "python_version < \"3.8.0\""}
+aiormq = ">=6.7.5,<6.8.0"
+setuptools = {version = "*", markers = "python_version < \"3.8\""}
+typing_extensions = {version = "*", markers = "python_version < \"3.8\""}
 yarl = "*"
-
-[package.extras]
-develop = ["aiomisc (>=16.0,<17.0)", "coverage (!=4.3)", "coveralls", "nox", "pylava", "pytest", "pytest-cov", "shortuuid", "sphinx", "sphinx-autobuild", "timeout-decorator", "tox (>=2.4)"]
 
 [[package]]
 name = "aiormq"
-version = "6.6.4"
+version = "6.7.5"
 description = "Pure python AMQP asynchronous client library"
 category = "main"
 optional = false
 python-versions = ">=3.7,<4.0"
 files = [
-    {file = "aiormq-6.6.4-py3-none-any.whl", hash = "sha256:9fb93dc871eb9c45a410e29669624790c01b70d27f20d512a22b146c411440ea"},
-    {file = "aiormq-6.6.4.tar.gz", hash = "sha256:95835a4db6117263305d450f838ccdc3eabd427c0deb32fd617769ad4c989e98"},
+    {file = "aiormq-6.7.5-py3-none-any.whl", hash = "sha256:5756e2c31e83bc5e605c3a780af2060b4bed2da1baadf8276dd7e0da56047c70"},
+    {file = "aiormq-6.7.5.tar.gz", hash = "sha256:d2042d4d0dd94f40c81ca436f3e8882883fc38674fdd9f5cf94b2deec9f42366"},
 ]
 
 [package.dependencies]
@@ -1765,4 +1763,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.7"
-content-hash = "08ce77e6e8381786d82bd61e4660375e3823e64a246dc49e6e44f2f170c223ca"
+content-hash = "ccf137873929a51b4df0b39c4352e715d6b690aaba882fb7da2dba6e78039685"
