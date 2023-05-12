@@ -1,6 +1,6 @@
 name: Testing taskiq-aio-pika
 
-on: push
+on: [push, pull_request]
 
 jobs:
   lint:
