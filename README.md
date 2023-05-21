@@ -20,9 +20,13 @@ You can send delayed messages and set priorities to messages using labels.
 
 ## Delays
 
+### **Default retries**
+
 To send delayed message, you have to specify
 delay label. You can do it with `task` decorator,
-or by using kicker. For example:
+or by using kicker.  
+In this type of delay we are using additional queue with `expiration` parameter and after with time message will be deleted from `delay` queue and sent to the main taskiq queue.
+For example:
 
 ```python
 broker = AioPikaBroker()
@@ -48,6 +52,36 @@ async def main():
     # have to wait delay period before message is going to be sent.
 ```
 
+### **Retries with `rabbitmq-delayed-message-exchange` plugin**
+
+To send delayed message you can install `rabbitmq-delayed-message-exchange`
+plugin https://github.com/rabbitmq/rabbitmq-delayed-message-exchange.
+
+And you need to configure you broker.
+There is `delayed_message_exchange_plugin` `AioPikaBroker` parameter and it must be `True` to turn on delayed message functionality.  
+
+The delay plugin can handle tasks with different delay times well, and the delay based on dead letter queue is suitable for tasks with the same delay time.  
+For example:
+
+```python
+broker = AioPikaBroker(
+    delayed_message_exchange_plugin=True,
+)
+
+@broker.task(delay=3)
+async def delayed_task() -> int:
+    return 1
+
+async def main():
+    await broker.startup()
+    # This message will be received by workers
+    # After 3 seconds delay.
+    await delayed_task.kiq()
+
+    # This message is going to be received after the delay in 4 seconds.
+    # Since we overriden the `delay` label using kicker.
+    await delayed_task.kicker().with_labels(delay=4).kiq()
+```
 
 ## Priorities
 

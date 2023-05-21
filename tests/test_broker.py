@@ -173,7 +173,7 @@ async def test_delayed_message(
 
     # We check that message appears in delay queue.
     delay_msg = await delay_queue.get()
-    await delay_msg.nack(requeue=True)  # type: ignore
+    await delay_msg.nack(requeue=True)
 
     # After we wait the delay message must appear in
     # the main queue.
@@ -185,3 +185,33 @@ async def test_delayed_message(
 
     # Check that we can get the message.
     await main_queue.get()
+
+
+@pytest.mark.anyio
+async def test_delayed_message_with_plugin(
+    broker_with_delayed_message_plugin: AioPikaBroker,
+    test_channel: Channel,
+    queue_name: str,
+) -> None:
+    """Test that we can send delayed messages with plugin.
+
+    :param broker_with_delayed_message_plugin: broker with
+    turned on plugin integration.
+    :param test_channel: amqp channel for tests.
+    :param queue_name: test queue name.
+    """
+    main_queue = await test_channel.get_queue(queue_name)
+    broker_msg = BrokerMessage(
+        task_id="1",
+        task_name="name",
+        message=b"message",
+        labels={"delay": "2"},
+    )
+
+    await broker_with_delayed_message_plugin.kick(broker_msg)
+    with pytest.raises(QueueEmpty):
+        await main_queue.get(no_ack=True)
+
+    await asyncio.sleep(2)
+
+    assert await main_queue.get()
