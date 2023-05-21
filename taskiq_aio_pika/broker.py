@@ -252,22 +252,21 @@ class AioPikaBroker(AsyncBroker):
                 ensure=False,
             )
             await exchange.publish(rmq_message, routing_key=message.task_name)
+        elif self._delayed_message_exchange_plugin:
+            rmq_message.headers["x-delay"] = delay * 1000
+            exchange = await self.write_channel.get_exchange(
+                self._delay_plugin_exchange_name,
+            )
+            await exchange.publish(
+                rmq_message,
+                routing_key=self._routing_key,
+            )
         else:
-            if self._delayed_message_exchange_plugin:
-                rmq_message.headers["x-delay"] = delay * 1000
-                exchange = await self.write_channel.get_exchange(
-                    self._delay_plugin_exchange_name,
-                )
-                await exchange.publish(
-                    rmq_message,
-                    routing_key=self._routing_key,
-                )
-            else:
-                rmq_message.expiration = timedelta(seconds=delay)
-                await self.write_channel.default_exchange.publish(
-                    rmq_message,
-                    routing_key=self._delay_queue_name,
-                )
+            rmq_message.expiration = timedelta(seconds=delay)
+            await self.write_channel.default_exchange.publish(
+                rmq_message,
+                routing_key=self._delay_queue_name,
+            )
 
     async def listen(self) -> AsyncGenerator[bytes, None]:
         """
