@@ -6,6 +6,7 @@ repos:
     hooks:
       - id: check-ast
       - id: trailing-whitespace
+        exclude: 'README.md'
       - id: check-toml
       - id: end-of-file-fixer
 
