@@ -5,9 +5,7 @@ from typing import Any, AsyncGenerator, Callable, Dict, Optional, TypeVar
 
 from aio_pika import DeliveryMode, ExchangeType, Message, connect_robust
 from aio_pika.abc import AbstractChannel, AbstractQueue, AbstractRobustConnection
-from taskiq.abc.broker import AsyncBroker
-from taskiq.abc.result_backend import AsyncResultBackend
-from taskiq.message import BrokerMessage
+from taskiq import AckableMessage, AsyncBroker, AsyncResultBackend, BrokerMessage
 
 _T = TypeVar("_T")  # noqa: WPS111
 
@@ -228,7 +226,7 @@ class AioPikaBroker(AsyncBroker):
         if self.write_channel is None:
             raise ValueError("Please run startup before kicking.")
 
-        message_base_params: dict[str, Any] = {
+        message_base_params: Dict[str, Any] = {
             "body": message.message,
             "headers": {
                 "task_id": message.task_id,
@@ -236,12 +234,11 @@ class AioPikaBroker(AsyncBroker):
                 **message.labels,
             },
             "delivery_mode": DeliveryMode.PERSISTENT,
+            "priority": parse_val(
+                int,
+                message.labels.get("priority"),
+            ),
         }
-
-        message_base_params["priority"] = parse_val(
-            int,
-            message.labels.get("priority"),
-        )
 
         delay: Optional[int] = parse_val(int, message.labels.get("delay"))
         rmq_message: Message = Message(**message_base_params)
@@ -268,7 +265,7 @@ class AioPikaBroker(AsyncBroker):
                 routing_key=self._delay_queue_name,
             )
 
-    async def listen(self) -> AsyncGenerator[bytes, None]:
+    async def listen(self) -> AsyncGenerator[AckableMessage, None]:
         """
         Listen to queue.
 
@@ -284,5 +281,8 @@ class AioPikaBroker(AsyncBroker):
         queue = await self.declare_queues(self.read_channel)
         async with queue.iterator() as iterator:
             async for message in iterator:
-                async with message.process():
-                    yield message.body
+                yield AckableMessage(
+                    data=message.body,
+                    ack=message.ack,
+                    reject=message.reject,
+                )

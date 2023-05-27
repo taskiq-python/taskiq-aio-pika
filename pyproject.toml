@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "taskiq-aio-pika"
-version = "0.2.2"
+version = "0.3.0"
 description = "RabbitMQ broker for taskiq"
 authors = ["Pavel Kirilin <win10@list.ru>"]
 readme = "README.md"
@@ -20,8 +20,9 @@ keywords = ["taskiq", "tasks", "distributed", "async", "aio-pika"]
 
 [tool.poetry.dependencies]
 python = "^3.7"
-taskiq = "^0"
+taskiq = ">=0.6.0,<1"
 aio-pika = "^9.0"
+importlib-metadata = {version = "^4.0.0", python = "<3.8"}
 
 [tool.poetry.dev-dependencies]
 pytest = "^7.0"
