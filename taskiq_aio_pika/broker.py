@@ -226,7 +226,7 @@ class AioPikaBroker(AsyncBroker):
         if self.write_channel is None:
             raise ValueError("Please run startup before kicking.")
 
-        message_base_params: dict[str, Any] = {
+        message_base_params: Dict[str, Any] = {
             "body": message.message,
             "headers": {
                 "task_id": message.task_id,
@@ -234,12 +234,11 @@ class AioPikaBroker(AsyncBroker):
                 **message.labels,
             },
             "delivery_mode": DeliveryMode.PERSISTENT,
+            "priority": parse_val(
+                int,
+                message.labels.get("priority"),
+            ),
         }
-
-        message_base_params["priority"] = parse_val(
-            int,
-            message.labels.get("priority"),
-        )
 
         delay: Optional[int] = parse_val(int, message.labels.get("delay"))
         rmq_message: Message = Message(**message_base_params)
