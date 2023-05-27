@@ -1466,14 +1466,14 @@ pbr = ">=2.0.0,<2.1.0 || >2.1.0"
 
 [[package]]
 name = "taskiq"
-version = "0.5.0"
+version = "0.6.0"
 description = "Distributed task queue with full async support"
 category = "main"
 optional = false
 python-versions = ">=3.7,<4.0"
 files = [
-    {file = "taskiq-0.5.0-py3-none-any.whl", hash = "sha256:4a7063ea46d1be272b3a38fda1523b344aa55fa18e20192b94c9bf7fcce3be7d"},
-    {file = "taskiq-0.5.0.tar.gz", hash = "sha256:9c0951b57681ec657f9fa4b2f84adbcf1b9f173a312ef0aaad16eaaa84f2e869"},
+    {file = "taskiq-0.6.0-py3-none-any.whl", hash = "sha256:ed4292f4b05cc3cd25f6a73074d4fe5ea3e794c59bf2feb255f2af6dab18b242"},
+    {file = "taskiq-0.6.0.tar.gz", hash = "sha256:50822a3dbc4fea93576324206b76d4f98b20c9a8794b304778709735c30dd406"},
 ]
 
 [package.dependencies]
@@ -1767,4 +1767,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.7"
-content-hash = "dffd142f4769150f40c849f9337c9c9b607c0eafd3d311580786d31910a4253f"
+content-hash = "a63cc48d9a3609b97dab498f1182f741906cc2344a7e9a8b146b1020687e0b62"
