@@ -4,12 +4,13 @@ import uuid
 import pytest
 from aio_pika import Channel, Message
 from aio_pika.exceptions import QueueEmpty
-from taskiq import BrokerMessage
+from taskiq import AckableMessage, BrokerMessage
+from taskiq.utils import maybe_awaitable
 
 from taskiq_aio_pika.broker import AioPikaBroker
 
 
-async def get_first_task(broker: AioPikaBroker) -> bytes:  # type: ignore
+async def get_first_task(broker: AioPikaBroker) -> AckableMessage:  # type: ignore
     """
     Get first message from the queue.
 
@@ -46,7 +47,8 @@ async def test_kick_success(broker: AioPikaBroker) -> None:
 
     message = await asyncio.wait_for(get_first_task(broker), timeout=0.4)
 
-    assert message == sent.message
+    assert message.data == sent.message
+    await maybe_awaitable(message.ack())
 
 
 @pytest.mark.anyio
@@ -111,7 +113,8 @@ async def test_listen(
 
     message = await asyncio.wait_for(get_first_task(broker), timeout=0.4)
 
-    assert message == b"test_message"
+    assert message.data == b"test_message"
+    await maybe_awaitable(message.ack())
 
 
 @pytest.mark.anyio
@@ -133,9 +136,10 @@ async def test_wrong_format(
         routing_key=queue_name,
     )
 
-    msg_bytes = await asyncio.wait_for(get_first_task(broker), 0.4)
+    message = await asyncio.wait_for(get_first_task(broker), 0.4)
 
-    assert msg_bytes == b"wrong"
+    assert message.data == b"wrong"
+    await maybe_awaitable(message.ack())
 
     with pytest.raises(QueueEmpty):
         await queue.get()
