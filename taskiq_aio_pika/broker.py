@@ -284,5 +284,4 @@ class AioPikaBroker(AsyncBroker):
                 yield AckableMessage(
                     data=message.body,
                     ack=message.ack,
-                    reject=message.reject,
                 )
