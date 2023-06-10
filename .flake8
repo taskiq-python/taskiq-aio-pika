@@ -69,15 +69,6 @@ ignore =
   ; Found function with too much cognitive complexity
   WPS231,
 
-  ; all init files
-  __init__.py:
-  ; ignore not used imports
-  F401,
-  ; ignore import with wildcard
-  F403,
-  ; Found wrong metadata variable
-  WPS410,
-
 per-file-ignores =
   ; all tests
   test_*.py,tests.py,tests_*.py,*/tests/*:
@@ -95,6 +86,15 @@ per-file-ignores =
   WPS217,
   ; Found too many arguments
   WPS211,
+
+  ; all init files
+  __init__.py:
+  ; ignore not used imports
+  F401,
+  ; ignore import with wildcard
+  F403,
+  ; Found wrong metadata variable
+  WPS410,
 
 
 exclude =
