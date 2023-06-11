@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "taskiq-aio-pika"
-version = "0.3.0"
+version = "0.4.0"
 description = "RabbitMQ broker for taskiq"
 authors = ["Pavel Kirilin <win10@list.ru>"]
 readme = "README.md"
@@ -8,7 +8,6 @@ classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
@@ -19,7 +18,7 @@ repository = "https://github.com/taskiq-python/taskiq-aio-pika"
 keywords = ["taskiq", "tasks", "distributed", "async", "aio-pika"]
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = "^3.8.1"
 taskiq = ">=0.6.0,<1"
 aio-pika = "^9.0"
 importlib-metadata = {version = "^4.0.0", python = "<3.8"}
@@ -29,11 +28,11 @@ pytest = "^7.0"
 isort = "^5.10.1"
 mypy = "^0.971"
 black = "^22.6.0"
-flake8 = "^4"
+flake8 = "^6"
 pre-commit = "^2.20.0"
 yesqa = "^1.4.0"
 autoflake = "^1.4"
-wemake-python-styleguide = "^0.16.1"
+wemake-python-styleguide = "^0.18.0"
 pytest-xdist = { version = "^2.5.0", extras = ["psutil"] }
 anyio = "^3.6.1"
 pytest-cov = "^3.0.0"
