@@ -45,7 +45,6 @@ show_error_codes = true
 implicit_reexport = true
 allow_untyped_decorators = true
 warn_return_any = false
-explicit_package_bases = true
 
 [tool.isort]
 profile = "black"
