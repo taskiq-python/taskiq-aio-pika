@@ -24,7 +24,7 @@ You can send delayed messages and set priorities to messages using labels.
 
 To send delayed message, you have to specify
 delay label. You can do it with `task` decorator,
-or by using kicker.  
+or by using kicker.
 In this type of delay we are using additional queue with `expiration` parameter and after with time message will be deleted from `delay` queue and sent to the main taskiq queue.
 For example:
 
@@ -58,9 +58,9 @@ To send delayed message you can install `rabbitmq-delayed-message-exchange`
 plugin https://github.com/rabbitmq/rabbitmq-delayed-message-exchange.
 
 And you need to configure you broker.
-There is `delayed_message_exchange_plugin` `AioPikaBroker` parameter and it must be `True` to turn on delayed message functionality.  
+There is `delayed_message_exchange_plugin` `AioPikaBroker` parameter and it must be `True` to turn on delayed message functionality.
 
-The delay plugin can handle tasks with different delay times well, and the delay based on dead letter queue is suitable for tasks with the same delay time.  
+The delay plugin can handle tasks with different delay times well, and the delay based on dead letter queue is suitable for tasks with the same delay time.
 For example:
 
 ```python

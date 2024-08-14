@@ -26,7 +26,7 @@ aio-pika = "^9.0"
 [tool.poetry.dev-dependencies]
 pytest = "^7.0"
 isort = "^5.10.1"
-mypy = "^0.971"
+mypy = "^1"
 black = "^22.6.0"
 pre-commit = "^2.20.0"
 pytest-xdist = { version = "^2.5.0", extras = ["psutil"] }
@@ -45,6 +45,7 @@ show_error_codes = true
 implicit_reexport = true
 allow_untyped_decorators = true
 warn_return_any = false
+explicit_package_bases = true
 
 [tool.isort]
 profile = "black"
@@ -117,7 +118,7 @@ convention = "pep257"
 ignore-decorators = ["typing.overload"]
 
 [tool.ruff.lint.pylint]
-allow-magic-value-types = ["int", "str", "float"]
+allow-magic-value-types = ["int", "str", "float", "bytes"]
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["taskiq_dependencies.Depends", "taskiq.TaskiqDepends"]
