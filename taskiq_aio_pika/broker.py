@@ -52,6 +52,8 @@ class AioPikaBroker(AsyncBroker):
         exchange_type: ExchangeType = ExchangeType.TOPIC,
         max_priority: Optional[int] = None,
         delayed_message_exchange_plugin: bool = False,
+        declare_exchange_kwargs: Optional[Dict[Any, Any]] = None,
+        declare_queues_kwargs: Optional[Dict[Any, Any]] = None,
         **connection_kwargs: Any,
     ) -> None:
         """
@@ -80,6 +82,8 @@ class AioPikaBroker(AsyncBroker):
         :param max_priority: maximum priority value for messages.
         :param delayed_message_exchange_plugin: turn on or disable
             delayed-message-exchange rabbitmq plugin.
+        :param declare_exchange_kwargs: additional from AbstractChannel.declare_exchange
+        :param declare_queues_kwargs: additional from AbstractChannel.declare_queue
         :param connection_kwargs: additional keyword arguments,
             for connect_robust method of aio-pika.
         """
@@ -92,7 +96,9 @@ class AioPikaBroker(AsyncBroker):
         self._exchange_type = exchange_type
         self._qos = qos
         self._declare_exchange = declare_exchange
+        self._declare_exchange_kwargs = declare_exchange_kwargs or {}
         self._declare_queues = declare_queues
+        self._declare_queues_kwargs = declare_queues_kwargs or {}
         self._queue_name = queue_name
         self._routing_key = routing_key
         self._max_priority = max_priority
@@ -135,6 +141,7 @@ class AioPikaBroker(AsyncBroker):
             await self.write_channel.declare_exchange(
                 self._exchange_name,
                 type=self._exchange_type,
+                **self._declare_exchange_kwargs,
             )
 
         if self._delayed_message_exchange_plugin:
@@ -178,6 +185,7 @@ class AioPikaBroker(AsyncBroker):
         """
         await channel.declare_queue(
             self._dead_letter_queue_name,
+            **self._declare_queues_kwargs,
         )
         args: "Dict[str, Any]" = {
             "x-dead-letter-exchange": "",
@@ -188,6 +196,7 @@ class AioPikaBroker(AsyncBroker):
         queue = await channel.declare_queue(
             self._queue_name,
             arguments=args,
+            **self._declare_queues_kwargs,
         )
         if self._delayed_message_exchange_plugin:
             await queue.bind(
@@ -201,6 +210,7 @@ class AioPikaBroker(AsyncBroker):
                     "x-dead-letter-exchange": "",
                     "x-dead-letter-routing-key": self._queue_name,
                 },
+                **self._declare_queues_kwargs,
             )
 
         await queue.bind(
