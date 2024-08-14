@@ -7,7 +7,7 @@ from aio_pika import DeliveryMode, ExchangeType, Message, connect_robust
 from aio_pika.abc import AbstractChannel, AbstractQueue, AbstractRobustConnection
 from taskiq import AckableMessage, AsyncBroker, AsyncResultBackend, BrokerMessage
 
-_T = TypeVar("_T")  # noqa: WPS111
+_T = TypeVar("_T")
 
 logger = getLogger("taskiq.aio_pika_broker")
 
@@ -35,7 +35,7 @@ def parse_val(
 class AioPikaBroker(AsyncBroker):
     """Broker that works with RabbitMQ."""
 
-    def __init__(  # noqa: WPS211
+    def __init__(
         self,
         url: Optional[str] = None,
         result_backend: Optional[AsyncResultBackend[_T]] = None,
@@ -119,7 +119,7 @@ class AioPikaBroker(AsyncBroker):
         self.write_channel: Optional[AbstractChannel] = None
         self.read_channel: Optional[AbstractChannel] = None
 
-    async def startup(self) -> None:  # noqa: WPS217
+    async def startup(self) -> None:
         """Create exchange and queue on startup."""
         await super().startup()
         self.write_conn = await connect_robust(

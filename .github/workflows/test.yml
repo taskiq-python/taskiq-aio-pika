@@ -8,10 +8,8 @@ jobs:
       matrix:
         cmd:
           - black
-          - flake8
-          - isort
+          - ruff
           - mypy
-          - autoflake
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -20,7 +18,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.9"
+          python-version: "3.11"
           cache: "poetry"
       - name: Install deps
         run: poetry install
@@ -43,7 +41,7 @@ jobs:
           - 5672:5672
     strategy:
       matrix:
-        py_version: ["3.8", "3.9", "3.10", "3.11"]
+        py_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
     runs-on: "ubuntu-latest"
     steps:
       - uses: actions/checkout@v2

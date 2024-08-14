@@ -17,7 +17,7 @@ async def get_first_task(broker: AioPikaBroker) -> AckableMessage:  # type: igno
     :param broker: async message broker.
     :return: first message from listen method
     """
-    async for message in broker.listen():
+    async for message in broker.listen():  # noqa: RET503
         return message
 
 
