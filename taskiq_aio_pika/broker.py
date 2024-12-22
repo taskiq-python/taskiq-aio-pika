@@ -1,4 +1,5 @@
 import asyncio
+import copy
 from datetime import timedelta
 from logging import getLogger
 from typing import Any, AsyncGenerator, Callable, Dict, Optional, TypeVar
@@ -183,9 +184,15 @@ class AioPikaBroker(AsyncBroker):
         :param channel: channel to used for declaration.
         :return: main queue instance.
         """
+        declare_queues_kwargs_ex_arguments = copy.copy(self._declare_queues_kwargs)
+        declare_queue_arguments = declare_queues_kwargs_ex_arguments.pop(
+            "arguments",
+            {},
+        )
         await channel.declare_queue(
             self._dead_letter_queue_name,
-            **self._declare_queues_kwargs,
+            **declare_queues_kwargs_ex_arguments,
+            arguments=declare_queue_arguments,
         )
         args: "Dict[str, Any]" = {
             "x-dead-letter-exchange": "",
@@ -195,8 +202,8 @@ class AioPikaBroker(AsyncBroker):
             args["x-max-priority"] = self._max_priority
         queue = await channel.declare_queue(
             self._queue_name,
-            arguments=args,
-            **self._declare_queues_kwargs,
+            arguments=args | declare_queue_arguments,
+            **declare_queues_kwargs_ex_arguments,
         )
         if self._delayed_message_exchange_plugin:
             await queue.bind(
@@ -209,8 +216,9 @@ class AioPikaBroker(AsyncBroker):
                 arguments={
                     "x-dead-letter-exchange": "",
                     "x-dead-letter-routing-key": self._queue_name,
-                },
-                **self._declare_queues_kwargs,
+                }
+                | declare_queue_arguments,
+                **declare_queues_kwargs_ex_arguments,
             )
 
         await queue.bind(

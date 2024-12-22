@@ -219,3 +219,30 @@ async def test_delayed_message_with_plugin(
     await asyncio.sleep(2)
 
     assert await main_queue.get()
+
+
+@pytest.mark.anyio
+async def test_quorum_queues(amqp_url: str) -> None:
+    broker = AioPikaBroker(
+        amqp_url,
+        declare_queues_kwargs={
+            "arguments": {"x-queue-type": "quorum", "x-delivery-limit": 3},
+            "durable": True,
+        },
+        declare_queues=False,
+    )
+    await broker.startup()
+    queue = await broker.declare_queues(broker.write_channel)  # type: ignore[arg-type]
+
+    assert queue.arguments == {
+        "x-dead-letter-exchange": "",
+        "x-dead-letter-routing-key": "taskiq.dead_letter",
+        "x-queue-type": "quorum",
+        "x-delivery-limit": 3,
+    }
+
+    await queue.delete(
+        timeout=1,
+        if_empty=False,
+        if_unused=False,
+    )
