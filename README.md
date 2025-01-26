@@ -116,6 +116,32 @@ async def main():
 
 ```
 
+## Queue Types and Message Reliability
+
+AioPikaBroker supports both classic and quorum queues. Quorum queues are a more modern queue type in RabbitMQ that provides better reliability and data safety guarantees.
+
+```python
+from taskiq_aio_pika import AioPikaBroker, QueueType
+
+broker = AioPikaBroker(
+    queue_type=QueueType.QUORUM, # Use quorum queues for better reliability
+    max_attempts_at_message=3  # Limit redelivery attempts
+)
+```
+
+### Message Redelivery Control
+
+When message processing fails due to consumer crashes (e.g. due to an OOM condition resulting in a SIGKILL), network issues, or other infrastructure problems, before the consumer has had the chance to acknowledge, positively or negatively, the message (and schedule a retry via taskiq's retry middleware), RabbitMQ will requeue the message to the front of the queue and it will be redelivered. With quorum queues, you can control how many times such a message will be redelivered:
+
+- Set `max_attempts_at_message` to limit delivery attempts.
+- Set `max_attempts_at_message=None` for unlimited attempts.
+- This operates at the message delivery level, not application retry level. For application-level retries in case of exceptions that can be caught (e.g., temporary API failures), use taskiq's retry middleware instead.
+- After max attempts, the message is logged and discarded.
+- `max_attempts_at_message` requires using quorum queues (`queue_type=QueueType.QUORUM`).
+
+This is particularly useful for preventing infinite loops of redeliveries of messages that consistently cause the consumer to crash ([poison messages](https://www.rabbitmq.com/docs/quorum-queues#poison-message-handling)) and can cause the queue to backup.
+
+
 ## Configuration
 
 AioPikaBroker parameters:
@@ -125,13 +151,12 @@ AioPikaBroker parameters:
 * `exchange_name` - name of exchange that used to send messages.
 * `exchange_type` - type of the exchange. Used only if `declare_exchange` is True.
 * `queue_name` - queue that used to get incoming messages.
+* `queue_type` - type of RabbitMQ queue to use: `classic` or `quorum`. defaults to `classic`.
 * `routing_key` - that used to bind that queue to the exchange.
 * `declare_exchange` - whether you want to declare new exchange if it doesn't exist.
 * `max_priority` - maximum priority for messages.
-* `delay_queue_name` - custom delay queue name.
-    This queue is used to deliver messages with delays.
-* `dead_letter_queue_name` - custom dead letter queue name.
-    This queue is used to receive negatively acknowleged messages from the main queue.
+* `delay_queue_name` - custom delay queue name. This queue is used to deliver messages with delays.
+* `dead_letter_queue_name` - custom dead letter queue name. This queue is used to receive negatively acknowleged messages from the main queue.
 * `qos` - number of messages that worker can prefetch.
-* `declare_queues` - whether you want to declare queues even on
-    client side. May be useful for message persistance.
+* `declare_queues` - whether you want to declare queues even on client side. May be useful for message persistance.
+* `max_attempts_at_message` - maximum number of attempts at processing the same message. requires the queue type to be set to `QueueType.QUORUM`. defaults to `20` for quorum queues and to `None` for classic queues. is not the same as task retries. pass `None` for unlimited attempts.

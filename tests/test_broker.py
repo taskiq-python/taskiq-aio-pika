@@ -1,5 +1,6 @@
 import asyncio
 import uuid
+from typing import Any, Literal
 
 import pytest
 from aio_pika import Channel, Message
@@ -7,7 +8,7 @@ from aio_pika.exceptions import QueueEmpty
 from taskiq import AckableMessage, BrokerMessage
 from taskiq.utils import maybe_awaitable
 
-from taskiq_aio_pika.broker import AioPikaBroker
+from taskiq_aio_pika.broker import AioPikaBroker, QueueType
 
 
 async def get_first_task(broker: AioPikaBroker) -> AckableMessage:  # type: ignore
@@ -219,3 +220,109 @@ async def test_delayed_message_with_plugin(
     await asyncio.sleep(2)
 
     assert await main_queue.get()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "args, x_queue_type, x_delivery_limit, max_attempts_at_message, raised_exception",
+    [
+        (  # custom `max_attempts_at_message`
+            {
+                "queue_type": QueueType.QUORUM,
+                "max_attempts_at_message": 4,
+            },
+            "quorum",
+            5,
+            4,
+            False,
+        ),
+        (  # unlimited `max_attempts_at_message`
+            {
+                "queue_type": QueueType.QUORUM,
+                "max_attempts_at_message": None,
+            },
+            "quorum",
+            "-1",
+            None,
+            False,
+        ),
+        (  # default `max_attempts_at_message`
+            {
+                "queue_type": QueueType.QUORUM,
+            },
+            "quorum",
+            21,
+            20,
+            False,
+        ),
+        (  # classic queue type
+            {
+                "queue_type": QueueType.CLASSIC,
+            },
+            "classic",
+            False,
+            None,
+            False,
+        ),
+        (  # classic queue type with `max_attempts_at_message` at `None`
+            {
+                "queue_type": QueueType.CLASSIC,
+                "max_attempts_at_message": None,
+            },
+            "classic",
+            False,
+            None,
+            False,
+        ),
+        ({}, "classic", False, None, False),  # default queue type
+        (  # `x-queue-type` should raise
+            {"declare_queues_kwargs": {"arguments": {"x-queue-type": "classic"}}},
+            "classic",
+            False,
+            None,
+            True,
+        ),
+        (  # `x-delivery-limit` should raise
+            {"declare_queues_kwargs": {"arguments": {"x-delivery-limit": 3}}},
+            None,
+            None,
+            None,
+            True,
+        ),
+        (  # classic queue type with `max_attempts_at_message` should raise
+            {
+                "queue_type": QueueType.CLASSIC,
+                "max_attempts_at_message": 3,
+            },
+            "classic",
+            False,
+            None,
+            True,
+        ),
+    ],
+)
+async def test_broker_arguments(
+    amqp_url: str,
+    args: dict[str, Any],
+    x_delivery_limit: int | str | Literal[False],
+    x_queue_type: str,
+    max_attempts_at_message: int | None,
+    raised_exception: bool,
+) -> None:
+    if raised_exception:
+        with pytest.raises(ValueError):
+            broker = AioPikaBroker(amqp_url, **args)
+        return
+
+    broker = AioPikaBroker(amqp_url, **args)
+    await broker.startup()
+    queue = await broker.declare_queues(broker.write_channel)  # type: ignore[arg-type]
+
+    assert queue.arguments["x-dead-letter-exchange"] == ""  # type: ignore[index]
+    assert queue.arguments["x-dead-letter-routing-key"] == "taskiq.dead_letter"  # type: ignore[index]
+    assert queue.arguments["x-queue-type"] == x_queue_type  # type: ignore[index]
+    if x_delivery_limit:
+        assert queue.arguments["x-delivery-limit"] == x_delivery_limit  # type: ignore[index]
+    assert broker.max_attempts_at_message == max_attempts_at_message
+
+    await broker.shutdown()
