@@ -1,15 +1,38 @@
 import asyncio
+import copy
 from datetime import timedelta
+from enum import Enum
 from logging import getLogger
-from typing import Any, AsyncGenerator, Callable, Dict, Optional, TypeVar
+from typing import (
+    Any,
+    AsyncGenerator,
+    Callable,
+    Dict,
+    Literal,
+    Optional,
+    TypeVar,
+    Union,
+)
 
 from aio_pika import DeliveryMode, ExchangeType, Message, connect_robust
 from aio_pika.abc import AbstractChannel, AbstractQueue, AbstractRobustConnection
-from taskiq import AckableMessage, AsyncBroker, AsyncResultBackend, BrokerMessage
+from taskiq import (
+    AsyncBroker,
+    AsyncResultBackend,
+    BrokerMessage,
+)
+from taskiq.message import AckableNackableWrappedMessageWithMetadata, MessageMetadata
 
 _T = TypeVar("_T")
 
 logger = getLogger("taskiq.aio_pika_broker")
+
+
+class QueueType(Enum):
+    """Type of RabbitMQ queue."""
+
+    CLASSIC = "classic"
+    QUORUM = "quorum"
 
 
 def parse_val(
@@ -35,7 +58,7 @@ def parse_val(
 class AioPikaBroker(AsyncBroker):
     """Broker that works with RabbitMQ."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0912
         self,
         url: Optional[str] = None,
         result_backend: Optional[AsyncResultBackend[_T]] = None,
@@ -44,6 +67,7 @@ class AioPikaBroker(AsyncBroker):
         loop: Optional[asyncio.AbstractEventLoop] = None,
         exchange_name: str = "taskiq",
         queue_name: str = "taskiq",
+        queue_type: QueueType = QueueType.CLASSIC,
         dead_letter_queue_name: Optional[str] = None,
         delay_queue_name: Optional[str] = None,
         declare_exchange: bool = True,
@@ -54,6 +78,7 @@ class AioPikaBroker(AsyncBroker):
         delayed_message_exchange_plugin: bool = False,
         declare_exchange_kwargs: Optional[Dict[Any, Any]] = None,
         declare_queues_kwargs: Optional[Dict[Any, Any]] = None,
+        max_attempts_at_message: Union[Optional[int], Literal["default"]] = "default",
         **connection_kwargs: Any,
     ) -> None:
         """
@@ -62,12 +87,13 @@ class AioPikaBroker(AsyncBroker):
         :param url: url to rabbitmq. If None,
             the default "amqp://guest:guest@localhost:5672" is used.
         :param result_backend: custom result backend.
-
         :param task_id_generator: custom task_id genertaor.
         :param qos: number of messages that worker can prefetch.
         :param loop: specific even loop.
         :param exchange_name: name of exchange that used to send messages.
         :param queue_name: queue that used to get incoming messages.
+        :param queue_type: type of RabbitMQ queue to use: `classic` or `quorum`.
+            defaults to `classic`.
         :param dead_letter_queue_name: custom name for dead-letter queue.
             by default it set to {queue_name}.dead_letter.
         :param delay_queue_name: custom name for queue that used to
@@ -86,6 +112,11 @@ class AioPikaBroker(AsyncBroker):
         :param declare_queues_kwargs: additional from AbstractChannel.declare_queue
         :param connection_kwargs: additional keyword arguments,
             for connect_robust method of aio-pika.
+        :param max_attempts_at_message: maximum number of attempts at processing
+            the same message. requires the queue type to be set to `QueueType.QUORUM`.
+            defaults to `20` for quorum queues and to `None` for classic queues.
+            is not the same as task retries. pass `None` for unlimited attempts.
+        :raises ValueError: if inappropriate arguments were passed.
         """
         super().__init__(result_backend, task_id_generator)
 
@@ -103,6 +134,52 @@ class AioPikaBroker(AsyncBroker):
         self._routing_key = routing_key
         self._max_priority = max_priority
         self._delayed_message_exchange_plugin = delayed_message_exchange_plugin
+
+        if self._declare_queues_kwargs.get("arguments", {}).get(
+            "x-queue-type",
+        ) or self._declare_queues_kwargs.get("arguments", {}).get("x-delivery-limit"):
+            raise ValueError(
+                "Use the `queue_type` and `max_attempts_at_message` parameters of "
+                "`AioPikaBroker.__init__` instead of `x-queue-type` and "
+                "`x-delivery-limit`",
+            )
+        if queue_type == QueueType.QUORUM:
+            self._declare_queues_kwargs.setdefault("arguments", {})[
+                "x-queue-type"
+            ] = "quorum"
+            self._declare_queues_kwargs["durable"] = True
+        else:
+            self._declare_queues_kwargs.setdefault("arguments", {})[
+                "x-queue-type"
+            ] = "classic"
+
+        if queue_type != QueueType.QUORUM and max_attempts_at_message not in (
+            "default",
+            None,
+        ):
+            raise ValueError(
+                "`max_attempts_at_message` requires `queue_type` to be set to "
+                "`QueueType.QUORUM`.",
+            )
+
+        if max_attempts_at_message == "default":
+            if queue_type == QueueType.QUORUM:
+                self.max_attempts_at_message = 20
+            else:
+                self.max_attempts_at_message = None
+        else:
+            self.max_attempts_at_message = max_attempts_at_message
+
+        if queue_type == QueueType.QUORUM:
+            if self.max_attempts_at_message is None:
+                # no limit
+                self._declare_queues_kwargs["arguments"]["x-delivery-limit"] = "-1"
+            else:
+                # the final attempt will be handled in `taskiq.Receiver`
+                # to generate visible logs
+                self._declare_queues_kwargs["arguments"]["x-delivery-limit"] = (
+                    self.max_attempts_at_message + 1
+                )
 
         self._dead_letter_queue_name = f"{queue_name}.dead_letter"
         if dead_letter_queue_name:
@@ -183,9 +260,15 @@ class AioPikaBroker(AsyncBroker):
         :param channel: channel to used for declaration.
         :return: main queue instance.
         """
+        declare_queues_kwargs_ex_arguments = copy.copy(self._declare_queues_kwargs)
+        declare_queue_arguments = declare_queues_kwargs_ex_arguments.pop(
+            "arguments",
+            {},
+        )
         await channel.declare_queue(
             self._dead_letter_queue_name,
-            **self._declare_queues_kwargs,
+            **declare_queues_kwargs_ex_arguments,
+            arguments=declare_queue_arguments,
         )
         args: "Dict[str, Any]" = {
             "x-dead-letter-exchange": "",
@@ -195,8 +278,8 @@ class AioPikaBroker(AsyncBroker):
             args["x-max-priority"] = self._max_priority
         queue = await channel.declare_queue(
             self._queue_name,
-            arguments=args,
-            **self._declare_queues_kwargs,
+            arguments=args | declare_queue_arguments,
+            **declare_queues_kwargs_ex_arguments,
         )
         if self._delayed_message_exchange_plugin:
             await queue.bind(
@@ -209,8 +292,9 @@ class AioPikaBroker(AsyncBroker):
                 arguments={
                     "x-dead-letter-exchange": "",
                     "x-dead-letter-routing-key": self._queue_name,
-                },
-                **self._declare_queues_kwargs,
+                }
+                | declare_queue_arguments,
+                **declare_queues_kwargs_ex_arguments,
             )
 
         await queue.bind(
@@ -275,7 +359,9 @@ class AioPikaBroker(AsyncBroker):
                 routing_key=self._delay_queue_name,
             )
 
-    async def listen(self) -> AsyncGenerator[AckableMessage, None]:
+    async def listen(
+        self,
+    ) -> AsyncGenerator[AckableNackableWrappedMessageWithMetadata, None]:
         """
         Listen to queue.
 
@@ -291,7 +377,12 @@ class AioPikaBroker(AsyncBroker):
         queue = await self.declare_queues(self.read_channel)
         async with queue.iterator() as iterator:
             async for message in iterator:
-                yield AckableMessage(
-                    data=message.body,
+                delivery_count: Optional[int] = message.headers.get("x-delivery-count")  # type: ignore[assignment]
+                yield AckableNackableWrappedMessageWithMetadata(
+                    message=message.body,
+                    metadata=MessageMetadata(
+                        delivery_count=delivery_count,
+                    ),
                     ack=message.ack,
+                    nack=message.nack,
                 )

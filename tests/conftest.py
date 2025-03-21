@@ -1,4 +1,5 @@
 import os
+from contextlib import suppress
 from typing import AsyncGenerator
 from uuid import uuid4
 
@@ -229,3 +230,13 @@ async def broker_with_delayed_message_plugin(
             if_empty=False,
             if_unused=False,
         )
+
+
+@pytest.fixture(autouse=True, scope="function")
+async def cleanup_rabbitmq(test_channel: Channel) -> AsyncGenerator[None, None]:
+    yield
+
+    for queue_name in ["taskiq", "taskiq.dead_letter", "taskiq.delay"]:
+        with suppress(Exception):
+            queue = await test_channel.get_queue(queue_name, ensure=False)
+            await queue.delete(if_unused=False, if_empty=False)
