@@ -250,7 +250,7 @@ class AioPikaBroker(AsyncBroker):
             ),
         }
 
-        delay: Optional[int] = parse_val(int, message.labels.get("delay"))
+        delay: Optional[float] = parse_val(float, message.labels.get("delay"))
         rmq_message: Message = Message(**message_base_params)
 
         if delay is None:
@@ -260,7 +260,7 @@ class AioPikaBroker(AsyncBroker):
             )
             await exchange.publish(rmq_message, routing_key=message.task_name)
         elif self._delayed_message_exchange_plugin:
-            rmq_message.headers["x-delay"] = delay * 1000
+            rmq_message.headers["x-delay"] = int(delay * 1000)
             exchange = await self.write_channel.get_exchange(
                 self._delay_plugin_exchange_name,
             )
