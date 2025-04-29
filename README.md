@@ -1,6 +1,6 @@
 # AioPika broker for taskiq
 
-This lirary provides you with aio-pika broker for taskiq.
+This library provides you with aio-pika broker for taskiq.
 
 Usage:
 ```python
