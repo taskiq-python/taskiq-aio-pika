@@ -193,6 +193,9 @@ class AioPikaBroker(AsyncBroker):
         }
         if self._max_priority is not None:
             args["x-max-priority"] = self._max_priority
+        if "arguments" in self._declare_queues_kwargs:
+            args.update(self._declare_queues_kwargs["arguments"])
+            del self._declare_queues_kwargs["arguments"]
         queue = await channel.declare_queue(
             self._queue_name,
             arguments=args,
