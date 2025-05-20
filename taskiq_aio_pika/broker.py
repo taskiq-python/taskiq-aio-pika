@@ -187,19 +187,21 @@ class AioPikaBroker(AsyncBroker):
             self._dead_letter_queue_name,
             **self._declare_queues_kwargs,
         )
-        args: "Dict[str, Any]" = {
+        args: Dict[str, Any] = {
             "x-dead-letter-exchange": "",
             "x-dead-letter-routing-key": self._dead_letter_queue_name,
         }
         if self._max_priority is not None:
             args["x-max-priority"] = self._max_priority
-        if "arguments" in self._declare_queues_kwargs:
-            args.update(self._declare_queues_kwargs["arguments"])
-            del self._declare_queues_kwargs["arguments"]
         queue = await channel.declare_queue(
             self._queue_name,
-            arguments=args,
-            **self._declare_queues_kwargs,
+            **{
+                **self._declare_queues_kwargs,
+                "arguments": {
+                    **self._declare_queues_kwargs.get("arguments", {}),
+                    **args,
+                },
+            },
         )
         if self._delayed_message_exchange_plugin:
             await queue.bind(
@@ -209,11 +211,14 @@ class AioPikaBroker(AsyncBroker):
         else:
             await channel.declare_queue(
                 self._delay_queue_name,
-                arguments={
-                    "x-dead-letter-exchange": "",
-                    "x-dead-letter-routing-key": self._queue_name,
+                **{
+                    **self._declare_queues_kwargs,
+                    "arguments": {
+                        **self._declare_queues_kwargs.get("arguments", {}),
+                        "x-dead-letter-exchange": "",
+                        "x-dead-letter-routing-key": self._queue_name,
+                    },
                 },
-                **self._declare_queues_kwargs,
             )
 
         await queue.bind(
