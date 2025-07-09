@@ -135,3 +135,26 @@ AioPikaBroker parameters:
 * `qos` - number of messages that worker can prefetch.
 * `declare_queues` - whether you want to declare queues even on
     client side. May be useful for message persistance.
+* `declare_queues_kwargs` - see [Custom Queue Arguments](#custom-queue-arguments) for more details.
+
+## Custom Queue Arguments
+
+You can pass custom arguments to the underlying RabbitMQ queue declaration by using the `declare_queues_kwargs` parameter of `AioPikaBroker`. If you want to set specific queue arguments (such as RabbitMQ extensions or custom behaviors), provide them in the `arguments` dictionary inside `declare_queues_kwargs`.
+
+These arguments will be merged with the default arguments used by the broker (such as dead-lettering and priority settings).
+
+**Example:**
+
+```python
+broker = AioPikaBroker(
+    declare_queues_kwargs={
+        "arguments": {
+            "x-message-ttl": 60000,  # Set message TTL to 60 seconds
+            "x-queue-type": "quorum",  # Use quorum queue type
+        }
+    }
+)
+```
+
+This will ensure that the queue is created with your custom arguments, in addition to the broker's defaults.
+
