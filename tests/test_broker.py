@@ -10,7 +10,7 @@ from taskiq.utils import maybe_awaitable
 from taskiq_aio_pika.broker import AioPikaBroker
 
 
-async def get_first_task(broker: AioPikaBroker) -> AckableMessage:  # type: ignore
+async def get_first_task(broker: AioPikaBroker) -> AckableMessage:
     """
     Get first message from the queue.
 
