@@ -266,7 +266,14 @@ class AioPikaBroker(AsyncBroker):
                 self._exchange_name,
                 ensure=False,
             )
-            await exchange.publish(rmq_message, routing_key=message.task_name)
+
+            routing_key = message.task_name
+
+            # Because direct exchange uses exact routing key for routing
+            if self._exchange_type == ExchangeType.DIRECT:
+                routing_key = self._routing_key
+
+            await exchange.publish(rmq_message, routing_key=routing_key)
         elif self._delayed_message_exchange_plugin:
             rmq_message.headers["x-delay"] = int(delay * 1000)
             exchange = await self.write_channel.get_exchange(
