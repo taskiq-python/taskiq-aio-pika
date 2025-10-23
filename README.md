@@ -157,4 +157,3 @@ broker = AioPikaBroker(
 ```
 
 This will ensure that the queue is created with your custom arguments, in addition to the broker's defaults.
-
