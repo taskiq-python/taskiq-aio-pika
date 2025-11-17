@@ -1,43 +1,57 @@
-[tool.poetry]
+[project]
 name = "taskiq-aio-pika"
 version = "0.0.0"
 description = "RabbitMQ broker for taskiq"
-authors = ["Pavel Kirilin <win10@list.ru>"]
+authors = [
+    {name = "Pavel Kirilin", email = "win10@list.ru"}
+]
+maintainers = [
+    {name = "Pavel Kirilin", email = "win10@list.ru"}
+]
 readme = "README.md"
-license = "LICENSE"
+license = "MIT"
+license-files = ["LICENSE"]
 classifiers = [
     "Typing :: Typed",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Developers",
+    "Topic :: System :: Networking",
+    "Development Status :: 3 - Alpha",
 ]
 homepage = "https://github.com/taskiq-python/taskiq-aio-pika"
 repository = "https://github.com/taskiq-python/taskiq-aio-pika"
 keywords = ["taskiq", "tasks", "distributed", "async", "aio-pika"]
+requires-python = ">=3.10,<4"
+dependencies = [
+    "taskiq>=0.11.20,<1",
+    "aio-pika>=9.0.0",
+]
 
-[tool.poetry.dependencies]
-python = "^3.8.1"
-taskiq = ">=0.6.0,<1"
-aio-pika = "^9.0"
-
-[tool.poetry.group.dev.dependencies]
-pytest = "^7.0"
-isort = "^5.10.1"
-mypy = "^1"
-black = "^22.6.0"
-pre-commit = "^2.20.0"
-pytest-xdist = { version = "^2.5.0", extras = ["psutil"] }
-anyio = "^3.6.1"
-pytest-cov = "^3.0.0"
-mock = "^4.0.3"
-types-mock = "^4.0.15"
-ruff = "^0.5.7"
+[dependency-groups]
+dev = [
+    "pre-commit>=4.4.0",
+    # lint
+    "ruff>=0.14.5",
+    "black>=25.11.0",
+    # type check
+    "mypy>=1.18.2",
+    # tests
+    "pytest>=9.0.1",
+    "pytest-cov>=7.0.0",
+    "coverage>=7.11.3",
+    "pytest-xdist[psutil]>=3.8.0",
+    "anyio>=4.11.0",
+]
 
 [tool.mypy]
+python_version = "3.10"
 strict = true
 ignore_missing_imports = true
 allow_subclassing_any = true
@@ -48,15 +62,20 @@ implicit_reexport = true
 allow_untyped_decorators = true
 warn_return_any = false
 
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["uv_build>=0.9.9,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "taskiq_aio_pika"
+module-root = ""
+
+[tool.pytest.ini_options]
+log_level = 'INFO'
+anyio_mode = "auto"
 
 [tool.ruff]
+target-version="py310"
 # List of enabled rulsets.
 # See https://docs.astral.sh/ruff/rules/ for more information.
 lint.select = [
@@ -85,6 +104,7 @@ lint.select = [
     "ERA", # Checks for commented out code
     "PL",  # PyLint checks
     "RUF", # Specific to Ruff checks
+    "UP",  # pyupgrade
 ]
 lint.ignore = [
     "D105",    # Missing docstring in magic method
@@ -93,15 +113,13 @@ lint.ignore = [
     "D401",    # First line should be in imperative mood
     "D104",    # Missing docstring in public package
     "D100",    # Missing docstring in public module
-    "ANN102",  # Missing type annotation for self in method
-    "ANN101",  # Missing type annotation for argument
     "ANN401",  # typing.Any are disallowed in `**kwargs
     "PLR0913", # Too many arguments for function call
     "D106",    # Missing docstring in public nested class
     "SLF001", # Private member accessed
 ]
-exclude = [".venv/"]
 lint.mccabe = { max-complexity = 10 }
+exclude = [".venv/"]
 line-length = 88
 
 [tool.ruff.lint.per-file-ignores]

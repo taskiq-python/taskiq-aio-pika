@@ -1,4 +1,5 @@
 """Taskiq integration with aio-pika."""
+
 from importlib.metadata import version
 
 from taskiq_aio_pika.broker import AioPikaBroker

@@ -22,7 +22,6 @@ async def get_first_task(broker: AioPikaBroker) -> AckableMessage:
     return None  # type: ignore
 
 
-@pytest.mark.anyio
 async def test_kick_success(broker: AioPikaBroker) -> None:
     """
     Test that messages are published and read correctly.
@@ -52,7 +51,6 @@ async def test_kick_success(broker: AioPikaBroker) -> None:
     await maybe_awaitable(message.ack())
 
 
-@pytest.mark.anyio
 async def test_startup(
     broker: AioPikaBroker,
     test_channel: Channel,
@@ -83,7 +81,6 @@ async def test_startup(
     await test_channel.get_exchange(exchange_name, ensure=True)
 
 
-@pytest.mark.anyio
 async def test_listen(
     broker: AioPikaBroker,
     test_channel: Channel,
@@ -118,7 +115,6 @@ async def test_listen(
     await maybe_awaitable(message.ack())
 
 
-@pytest.mark.anyio
 async def test_wrong_format(
     broker: AioPikaBroker,
     queue_name: str,
@@ -146,7 +142,6 @@ async def test_wrong_format(
         await queue.get()
 
 
-@pytest.mark.anyio
 async def test_delayed_message(
     broker: AioPikaBroker,
     test_channel: Channel,
@@ -159,7 +154,7 @@ async def test_delayed_message(
     This test send message with delay label,
     checks that this message appears in delay queue.
     After that it waits specified delay period and
-    checks that message was transfered to the main queue.
+    checks that message was transferred to the main queue.
 
     :param broker: current broker.
     :param test_channel: amqp channel for tests.
@@ -192,7 +187,6 @@ async def test_delayed_message(
     await main_queue.get()
 
 
-@pytest.mark.anyio
 async def test_delayed_message_with_plugin(
     broker_with_delayed_message_plugin: AioPikaBroker,
     test_channel: Channel,
@@ -222,7 +216,6 @@ async def test_delayed_message_with_plugin(
     assert await main_queue.get()
 
 
-@pytest.mark.anyio
 async def test_direct_kick(
     broker: AioPikaBroker,
     test_channel: Channel,

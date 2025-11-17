@@ -1,7 +1,8 @@
 import asyncio
+from collections.abc import AsyncGenerator, Callable
 from datetime import timedelta
 from logging import getLogger
-from typing import Any, AsyncGenerator, Callable, Dict, Optional, TypeVar
+from typing import Any, TypeVar
 
 from aio_pika import DeliveryMode, ExchangeType, Message, connect_robust
 from aio_pika.abc import AbstractChannel, AbstractQueue, AbstractRobustConnection
@@ -14,8 +15,8 @@ logger = getLogger("taskiq.aio_pika_broker")
 
 def parse_val(
     parse_func: Callable[[str], _T],
-    target: Optional[str] = None,
-) -> Optional[_T]:
+    target: str | None = None,
+) -> _T | None:
     """
     Parse string to some value.
 
@@ -37,23 +38,23 @@ class AioPikaBroker(AsyncBroker):
 
     def __init__(
         self,
-        url: Optional[str] = None,
-        result_backend: Optional[AsyncResultBackend[_T]] = None,
-        task_id_generator: Optional[Callable[[], str]] = None,
+        url: str | None = None,
+        result_backend: AsyncResultBackend[_T] | None = None,
+        task_id_generator: Callable[[], str] | None = None,
         qos: int = 10,
-        loop: Optional[asyncio.AbstractEventLoop] = None,
+        loop: asyncio.AbstractEventLoop | None = None,
         exchange_name: str = "taskiq",
         queue_name: str = "taskiq",
-        dead_letter_queue_name: Optional[str] = None,
-        delay_queue_name: Optional[str] = None,
+        dead_letter_queue_name: str | None = None,
+        delay_queue_name: str | None = None,
         declare_exchange: bool = True,
         declare_queues: bool = True,
         routing_key: str = "#",
         exchange_type: ExchangeType = ExchangeType.TOPIC,
-        max_priority: Optional[int] = None,
+        max_priority: int | None = None,
         delayed_message_exchange_plugin: bool = False,
-        declare_exchange_kwargs: Optional[Dict[Any, Any]] = None,
-        declare_queues_kwargs: Optional[Dict[Any, Any]] = None,
+        declare_exchange_kwargs: dict[Any, Any] | None = None,
+        declare_queues_kwargs: dict[Any, Any] | None = None,
         **connection_kwargs: Any,
     ) -> None:
         """
@@ -75,7 +76,7 @@ class AioPikaBroker(AsyncBroker):
         :param declare_exchange: whether you want to declare new exchange
             if it doesn't exist.
         :param declare_queues: whether you want to declare queues even on
-            client side. May be useful for message persistance.
+            client side. May be useful for message persistence.
         :param routing_key: that used to bind that queue to the exchange.
         :param exchange_type: type of the exchange.
             Used only if `declare_exchange` is True.
@@ -114,10 +115,10 @@ class AioPikaBroker(AsyncBroker):
 
         self._delay_plugin_exchange_name = f"{exchange_name}.plugin_delay"
 
-        self.read_conn: Optional[AbstractRobustConnection] = None
-        self.write_conn: Optional[AbstractRobustConnection] = None
-        self.write_channel: Optional[AbstractChannel] = None
-        self.read_channel: Optional[AbstractChannel] = None
+        self.read_conn: AbstractRobustConnection | None = None
+        self.write_conn: AbstractRobustConnection | None = None
+        self.write_channel: AbstractChannel | None = None
+        self.read_channel: AbstractChannel | None = None
 
     async def startup(self) -> None:
         """Create exchange and queue on startup."""
@@ -187,7 +188,7 @@ class AioPikaBroker(AsyncBroker):
             self._dead_letter_queue_name,
             **self._declare_queues_kwargs,
         )
-        args: Dict[str, Any] = {
+        args: dict[str, Any] = {
             "x-dead-letter-exchange": "",
             "x-dead-letter-routing-key": self._dead_letter_queue_name,
         }
@@ -244,7 +245,7 @@ class AioPikaBroker(AsyncBroker):
         if self.write_channel is None:
             raise ValueError("Please run startup before kicking.")
 
-        message_base_params: Dict[str, Any] = {
+        message_base_params: dict[str, Any] = {
             "body": message.message,
             "headers": {
                 "task_id": message.task_id,
@@ -258,7 +259,7 @@ class AioPikaBroker(AsyncBroker):
             ),
         }
 
-        delay: Optional[float] = parse_val(float, message.labels.get("delay"))
+        delay: float | None = parse_val(float, message.labels.get("delay"))
         rmq_message: Message = Message(**message_base_params)
 
         if delay is None:
