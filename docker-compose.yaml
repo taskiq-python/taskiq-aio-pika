@@ -1,0 +1,17 @@
+services:
+  rabbitmq:
+    container_name: taskiq_aio_pika_rabbitmq
+    image: heidiks/rabbitmq-delayed-message-exchange:latest
+    environment:
+      RABBITMQ_DEFAULT_USER: "guest"
+      RABBITMQ_DEFAULT_PASS: "guest"
+      RABBITMQ_DEFAULT_VHOST: "/"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running", "-q"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+      - "61613:61613"
