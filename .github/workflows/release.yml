@@ -8,8 +8,6 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment:
-      name: release
     permissions:
       id-token: write
     steps:
@@ -23,4 +21,7 @@ jobs:
           version: "latest"
       - run: uv version "${GITHUB_REF_NAME}"
       - run: uv build
-      - run: uv publish --trusted-publishing always
+      - name: Release package
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: uv publish
