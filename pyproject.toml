@@ -30,8 +30,9 @@ repository = "https://github.com/taskiq-python/taskiq-aio-pika"
 keywords = ["taskiq", "tasks", "distributed", "async", "aio-pika"]
 requires-python = ">=3.10,<4"
 dependencies = [
-    "taskiq>=0.11.20,<1",
+    "taskiq>=0.12.0,<1",
     "aio-pika>=9.0.0",
+    "aiostream>=0.7.1",
 ]
 
 [dependency-groups]
@@ -48,6 +49,10 @@ dev = [
     "coverage>=7.11.3",
     "pytest-xdist[psutil]>=3.8.0",
     "anyio>=4.11.0",
+    {include-group = "examples"},
+]
+examples = [
+    "taskiq-redis>=1.1.2",
 ]
 
 [tool.mypy]
@@ -130,6 +135,12 @@ line-length = 88
     "SLF001", # Private member accessed
     "S311",   # Standard pseudo-random generators are not suitable for security/cryptographic purposes
     "D101",   # Missing docstring in public class
+    "D102",   # Missing docstring in public method
+    "E501",   # Line too long
+]
+"examples/*" = [
+    "D",    # missing docstrings
+    "T201", # print found
 ]
 
 [tool.ruff.lint.pydocstyle]
