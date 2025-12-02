@@ -367,7 +367,7 @@ class AioPikaBroker(AsyncBroker):
             delivery_mode=DeliveryMode.PERSISTENT,
             priority=priority,
         )
-        delay = parse_val(int, message.labels.get("delay"))
+        delay = parse_val(float, message.labels.get("delay"))
 
         if len(self._task_queues) == 1:
             routing_key_name = (

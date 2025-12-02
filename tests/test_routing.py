@@ -181,7 +181,7 @@ class TestRouting:
         ), "Message was not routed to queue, but should be by specific name"
         await received_message_2.ack()
 
-    async def test_when_exchange_fanaout__when_message_published_in_all_queues(
+    async def test_when_exchange_fanout__when_message_published_in_all_queues(
         self,
         amqp_url: str,
         test_channel: Channel,
