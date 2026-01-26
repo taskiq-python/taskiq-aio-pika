@@ -140,7 +140,7 @@ broker = AioPikaBroker(
         declare=True,
         durable=True,
         auto_delete=False,
-    )
+    ),
     task_queues=[
         Queue(
             name="custom_queue",
