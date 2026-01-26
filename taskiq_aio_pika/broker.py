@@ -102,7 +102,7 @@ class AioPikaBroker(AsyncBroker):
         self._label_for_routing = label_for_routing
         self._label_for_priority = label_for_priority
 
-        self._delay_queue = delay_queue or Queue(name="taskiq.delay")
+        self._delay_queue = delay_queue
 
         self._delayed_message_exchange_plugin = delayed_message_exchange_plugin
         if self._delayed_message_exchange_plugin:
@@ -261,7 +261,7 @@ class AioPikaBroker(AsyncBroker):
             self._task_queues.append(Queue())
 
         queues = self._task_queues.copy()
-        if not self._delayed_message_exchange_plugin:
+        if not self._delayed_message_exchange_plugin and self._delay_queue:
             queues.append(self._delay_queue)
 
         for queue in filter(lambda queue: queue.declare, queues):
@@ -269,7 +269,7 @@ class AioPikaBroker(AsyncBroker):
             if queue.max_priority is not None:
                 per_queue_arguments["x-max-priority"] = queue.max_priority
             per_queue_arguments["x-queue-type"] = queue.type.value
-            if queue.name == self._delay_queue.name:
+            if self._delay_queue and queue.name == self._delay_queue.name:
                 per_queue_arguments["x-dead-letter-exchange"] = self._exchange.name
                 per_queue_arguments["x-dead-letter-routing-key"] = (
                     self._delay_queue.routing_key
@@ -292,7 +292,7 @@ class AioPikaBroker(AsyncBroker):
                 "Bind queue to exchange with routing key '%s'",
                 queue.routing_key or queue.name,
             )
-            if queue.name != self._delay_queue.name:
+            if not self._delay_queue or queue.name != self._delay_queue.name:
                 await declared_queue.bind(
                     exchange=self._exchange.name,
                     routing_key=queue.routing_key or queue.name,
@@ -401,11 +401,16 @@ class AioPikaBroker(AsyncBroker):
                 self._delayed_message_exchange.name,
             )
             await exchange.publish(rmq_message, routing_key=routing_key_name)
-        else:
+        elif self._delay_queue:
             rmq_message.expiration = timedelta(seconds=delay)
             await self.write_channel.default_exchange.publish(
                 rmq_message,
                 routing_key=self._delay_queue.routing_key or self._delay_queue.name,
+            )
+        else:
+            raise IncorrectRoutingKeyError(
+                "Delay requested but no delay queue or delayed-message-exchange "
+                "is configured in the broker.",
             )
 
     async def listen(self) -> AsyncGenerator[AckableMessage, None]:
@@ -442,7 +447,7 @@ class AioPikaBroker(AsyncBroker):
             *[
                 body(queue, consumer_args)
                 for queue, consumer_args in queue_with_consumer_args_list
-                if queue.name != self._delay_queue.name
+                if not self._delay_queue or queue.name != self._delay_queue.name
             ],
         )
 

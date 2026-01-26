@@ -23,14 +23,15 @@ class TestRouting:
         yield
         if self.broker is not None:
             await self.broker.shutdown()
+            queue_names = [queue.name for queue in self.broker._task_queues] + [
+                self.broker._dead_letter_queue.name,
+            ]
+            if self.broker._delay_queue is not None:
+                queue_names.append(self.broker._delay_queue.name)
             await _cleanup_amqp_resources(
                 amqp_url,
                 [self.broker._exchange.name],
-                [queue.name for queue in self.broker._task_queues]
-                + [
-                    self.broker._dead_letter_queue.name,
-                    self.broker._delay_queue.name,
-                ],
+                queue_names,
             )
 
     async def test_when_message_has_wrong_format__then_message_still_can_be_received(

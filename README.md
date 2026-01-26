@@ -28,7 +28,18 @@ async def test() -> None:
 
 ### Default delays
 
-To send delayed message, you have to specify delay label. You can do it with `task` decorator, or by using kicker.
+To send delayed messagem, you need to specify queue for delayed messages. You can do it by passing `delay_queue` parameter to the broker. For example:
+
+```python
+from taskiq_aio_pika import AioPikaBroker, Queue, QueueType
+
+broker = AioPikaBroker(
+    ...,
+    delay_queue=Queue(name="taskiq.delay_queue"),
+)
+```
+
+After that you have to specify delay label. You can do it with `task` decorator, or by using kicker.
 
 In this type of delay we are using additional queue with `expiration` parameter. After declared time message will be deleted from `delay` queue and sent to the main queue. For example:
 

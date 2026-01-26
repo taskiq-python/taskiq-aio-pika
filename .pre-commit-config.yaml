@@ -1,10 +1,6 @@
-# See https://pre-commit.com for more information
-# See https://pre-commit.com/hooks.html for more hooks
 repos:
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v6.0.0
+  - repo: builtin
     hooks:
-      - id: check-ast
       - id: trailing-whitespace
       - id: check-toml
       - id: end-of-file-fixer
@@ -47,12 +43,13 @@ repos:
           - "taskiq_aio_pika"
           - "tests"
 
-      - id: mypy
-        name: Validate types with MyPy
-        entry: uv run mypy
+      - id: ty
+        name: Validate types with ty
+        entry: uv run ty
         language: system
         pass_filenames: false
         types: [python]
         args:
+          - "check"
           - ./taskiq_aio_pika
           - ./tests

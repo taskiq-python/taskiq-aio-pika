@@ -1,6 +1,6 @@
 [project]
 name = "taskiq-aio-pika"
-version = "0.0.0"
+version = "0.6.0"
 description = "RabbitMQ broker for taskiq"
 authors = [
     {name = "Pavel Kirilin", email = "win10@list.ru"}
@@ -37,35 +37,29 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "pre-commit>=4.4.0",
-    # lint
+    "prek>=0.3.0",
+    {include-group = "test"},
+    {include-group = "lint"},
+    {include-group = "typecheck"},
+    {include-group = "examples"},
+]
+lint = [
     "ruff>=0.14.5",
     "black>=25.11.0",
-    # type check
-    "mypy>=1.18.2",
-    # tests
+]
+test = [
     "pytest>=9.0.1",
     "pytest-cov>=7.0.0",
     "coverage>=7.11.3",
     "pytest-xdist[psutil]>=3.8.0",
     "anyio>=4.11.0",
-    {include-group = "examples"},
+]
+typecheck = [
+    "ty>=0.0.13",
 ]
 examples = [
     "taskiq-redis>=1.1.2",
 ]
-
-[tool.mypy]
-python_version = "3.10"
-strict = true
-ignore_missing_imports = true
-allow_subclassing_any = true
-allow_untyped_calls = true
-pretty = true
-show_error_codes = true
-implicit_reexport = true
-allow_untyped_decorators = true
-warn_return_any = false
 
 [build-system]
 requires = ["uv_build>=0.9.9,<0.10.0"]
