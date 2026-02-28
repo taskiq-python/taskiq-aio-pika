@@ -72,7 +72,7 @@ class AioPikaBroker(AsyncBroker):
         :param url: url to rabbitmq. If None,
             the default "amqp://guest:guest@localhost:5672" is used.
         :param result_backend: custom result backend.
-        :param task_id_generator: custom task_id genertaor.
+        :param task_id_generator: custom task_id generator.
         :param qos: number of messages that worker can prefetch.
         :param loop: specific even loop.
         :param exchange: parameters of exchange that used to send messages.
@@ -247,7 +247,7 @@ class AioPikaBroker(AsyncBroker):
         declared by aio-pika.
 
         :param channel: channel to used for declaration.
-        :return: main queue instance.
+        :return: list of declared queues and their consumer arguments.
         """
         await self._declare_dead_letter_queue(channel)
         declared_queues = []
@@ -322,6 +322,9 @@ class AioPikaBroker(AsyncBroker):
     def with_queue(self, queue: Queue) -> Self:
         """
         Add new queue to the broker.
+
+        This method should be called before startup,
+        otherwise the new queue won't be declared and bound to exchange.
 
         :param queue: queue to add.
         :return: self.

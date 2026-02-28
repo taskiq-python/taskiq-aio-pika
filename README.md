@@ -28,7 +28,7 @@ async def test() -> None:
 
 ### Default delays
 
-To send delayed messagem, you need to specify queue for delayed messages. You can do it by passing `delay_queue` parameter to the broker. For example:
+To send delayed message, you need to specify queue for delayed messages. You can do it by passing `delay_queue` parameter to the broker. For example:
 
 ```python
 from taskiq_aio_pika import AioPikaBroker, Queue, QueueType
