@@ -9,13 +9,14 @@ This library provides you with aio-pika broker for taskiq.
 Features:
 - Supports delayed messages using dead-letter queues or RabbitMQ delayed message exchange plugin.
 - Supports message priorities.
+- Supports multiple queues and custom routing.
 
 Usage example:
 
 ```python
 from taskiq_aio_pika import AioPikaBroker
 
-broker = AioPikaBroker()
+broker = AioPikaBroker(...)
 
 @broker.task
 async def test() -> None:
@@ -27,12 +28,23 @@ async def test() -> None:
 
 ### Default delays
 
-To send delayed message, you have to specify delay label. You can do it with `task` decorator, or by using kicker.
+To send delayed message, you need to specify queue for delayed messages. You can do it by passing `delay_queue` parameter to the broker. For example:
+
+```python
+from taskiq_aio_pika import AioPikaBroker, Queue, QueueType
+
+broker = AioPikaBroker(
+    ...,
+    delay_queue=Queue(name="taskiq.delay_queue"),
+)
+```
+
+After that you have to specify delay label. You can do it with `task` decorator, or by using kicker.
 
 In this type of delay we are using additional queue with `expiration` parameter. After declared time message will be deleted from `delay` queue and sent to the main queue. For example:
 
 ```python
-broker = AioPikaBroker()
+broker = AioPikaBroker(...)
 
 @broker.task(delay=3)
 async def delayed_task() -> int:
@@ -86,13 +98,12 @@ async def main():
 ## Priorities
 
 You can define priorities for messages using `priority` label. Messages with higher priorities are delivered faster.
-But to use priorities you need to define `max_priority` of the main queue, by passing `max_priority` parameter in broker's init. This parameter sets maximum priority for the queue and declares it as the priority queue.
 
 Before doing so please read the [documentation](https://www.rabbitmq.com/priority.html#behaviour) about what
 downsides you get by using prioritized queues.
 
 ```python
-broker = AioPikaBroker(max_priority=10)
+broker = AioPikaBroker(...)
 
 # We can define default priority for tasks.
 @broker.task(priority=2)
@@ -111,42 +122,43 @@ async def main():
     await prio_task.kicker().with_labels(priority=None).kiq()
 ```
 
-## Configuration
+## Custom Queue and Exchange arguments
 
-AioPikaBroker parameters:
-
-* `url` - url to rabbitmq. If None, "amqp://guest:guest@localhost:5672" is used.
-* `result_backend` - custom result backend.
-* `task_id_generator` - custom task_id genertaor.
-* `exchange_name` - name of exchange that used to send messages.
-* `exchange_type` - type of the exchange. Used only if `declare_exchange` is True.
-* `queue_name` - queue that used to get incoming messages.
-* `routing_key` - that used to bind that queue to the exchange.
-* `declare_exchange` - whether you want to declare new exchange if it doesn't exist.
-* `max_priority` - maximum priority for messages.
-* `delay_queue_name` - custom delay queue name. This queue is used to deliver messages with delays.
-* `dead_letter_queue_name` - custom dead letter queue name.
-    This queue is used to receive negatively acknowledged messages from the main queue.
-* `qos` - number of messages that worker can prefetch.
-* `declare_queues` - whether you want to declare queues even on client side. May be useful for message persistence.
-* `declare_queues_kwargs` - see [Custom Queue Arguments](#custom-queue-arguments) for more details.
-
-## Custom Queue Arguments
-
-You can pass custom arguments to the underlying RabbitMQ queue declaration by using the `declare_queues_kwargs` parameter of `AioPikaBroker`. If you want to set specific queue arguments (such as RabbitMQ extensions or custom behaviors), provide them in the `arguments` dictionary inside `declare_queues_kwargs`.
+You can pass custom arguments to the underlying RabbitMQ queues and exchange declaration by using the `Queue`/`Exchange` classes from `taskiq_aio_pika`. If you used `faststream` before you are probably familiar with this concept.
 
 These arguments will be merged with the default arguments used by the broker
 (such as dead-lettering and priority settings). If there are any conflicts, the values you provide will take precedence over the broker's defaults. Example:
 
 ```python
+from taskiq_aio_pika import AioPikaBroker, Queue, QueueType, Exchange
+from aio_pika.abc import ExchangeType
+
 broker = AioPikaBroker(
-    declare_queues_kwargs={
-        "arguments": {
-            "x-message-ttl": 60000,  # Set message TTL to 60 seconds
-            "x-queue-type": "quorum",  # Use quorum queue type
-        }
-    }
+    exchange=Exchange(
+        name="custom_exchange",
+        type=ExchangeType.TOPIC,
+        declare=True,
+        durable=True,
+        auto_delete=False,
+    ),
+    task_queues=[
+        Queue(
+            name="custom_queue",
+            type=QueueType.CLASSIC,
+            declare=True,
+            durable=True,
+            max_priority=10,
+            routing_key="custom_queue",
+        )
+    ]
 )
 ```
 
 This will ensure that the queue is created with your custom arguments, in addition to the broker's defaults.
+
+
+## Multiqueue support
+
+You can define multiple queues for your tasks. Each queue can have its own routing key and other settings. And your workers can listen to multiple queues (or specific queue) as well.
+
+You can check [multiqueue usage example](./examples/topic_with_two_queues.py) in examples folder for more details.

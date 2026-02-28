@@ -8,6 +8,8 @@ from aio_pika import Channel, connect_robust
 from aio_pika.abc import AbstractChannel, AbstractRobustConnection
 
 from taskiq_aio_pika.broker import AioPikaBroker
+from taskiq_aio_pika.exchange import Exchange
+from taskiq_aio_pika.queue import Queue, QueueType
 
 
 @pytest.fixture(scope="session")
@@ -40,17 +42,7 @@ def queue_name() -> str:
 
     :return: random queue name.
     """
-    return uuid4().hex
-
-
-@pytest.fixture
-def routing_key() -> str:
-    """
-    Generated routing key.
-
-    :return: random routing key.
-    """
-    return uuid4().hex
+    return uuid4().hex + "_queue"
 
 
 @pytest.fixture
@@ -60,7 +52,7 @@ def delay_queue_name() -> str:
 
     :return: random exchange name.
     """
-    return uuid4().hex
+    return uuid4().hex + "_delay_queue"
 
 
 @pytest.fixture
@@ -70,7 +62,7 @@ def dead_queue_name() -> str:
 
     :return: random exchange name.
     """
-    return uuid4().hex
+    return uuid4().hex + "_dlx_queue"
 
 
 @pytest.fixture
@@ -80,7 +72,7 @@ def exchange_name() -> str:
 
     :return: random exchange name.
     """
-    return uuid4().hex
+    return uuid4().hex + "_exchange"
 
 
 @pytest.fixture
@@ -154,28 +146,29 @@ async def broker(
     exchange_name: str,
     test_channel: Channel,
 ) -> AsyncGenerator[AioPikaBroker, None]:
-    """
-    Yields new broker instance.
-
-    This function is used to
-    create broker, run startup,
-    and shutdown after test.
-
-    :param amqp_url: current rabbitmq connection string.
-    :param test_channel: amqp channel for tests.
-    :param queue_name: test queue name.
-    :param delay_queue_name: test delay queue name.
-    :param dead_queue_name: test dead letter queue name.
-    :param exchange_name: test exchange name.
-    :yield: broker.
-    """
     broker = AioPikaBroker(
         url=amqp_url,
-        declare_exchange=True,
-        exchange_name=exchange_name,
-        dead_letter_queue_name=dead_queue_name,
-        delay_queue_name=delay_queue_name,
-        queue_name=queue_name,
+        exchange=Exchange(
+            name=exchange_name,
+            declare=True,
+        ),
+        dead_letter_queue=Queue(
+            name=dead_queue_name,
+            declare=True,
+            type=QueueType.CLASSIC,
+        ),
+        delay_queue=Queue(
+            name=delay_queue_name,
+            declare=True,
+            type=QueueType.CLASSIC,
+        ),
+        task_queues=[
+            Queue(
+                name=queue_name,
+                declare=True,
+                type=QueueType.CLASSIC,
+            ),
+        ],
     )
     broker.is_worker_process = True
 
@@ -196,36 +189,29 @@ async def broker(
 async def broker_with_delayed_message_plugin(
     amqp_url: str,
     queue_name: str,
-    delay_queue_name: str,
     dead_queue_name: str,
     exchange_name: str,
-    routing_key: str,
     test_channel: Channel,
 ) -> AsyncGenerator[AioPikaBroker, None]:
-    """
-    Yields new broker instance.
-
-    This function is used to
-    create broker, run startup,
-    and shutdown after test.
-
-    :param amqp_url: current rabbitmq connection string.
-    :param test_channel: amqp channel for tests.
-    :param queue_name: test queue name.
-    :param delay_queue_name: test delay queue name.
-    :param dead_queue_name: test dead letter queue name.
-    :param exchange_name: test exchange name.
-    :param routing_key: routing_key.
-    :yield: broker.
-    """
     broker = AioPikaBroker(
         url=amqp_url,
-        declare_exchange=True,
-        exchange_name=exchange_name,
-        dead_letter_queue_name=dead_queue_name,
-        queue_name=queue_name,
+        exchange=Exchange(
+            name=exchange_name,
+            declare=True,
+        ),
+        dead_letter_queue=Queue(
+            name=dead_queue_name,
+            declare=True,
+            type=QueueType.CLASSIC,
+        ),
+        task_queues=[
+            Queue(
+                name=queue_name,
+                declare=True,
+                type=QueueType.CLASSIC,
+            ),
+        ],
         delayed_message_exchange_plugin=True,
-        routing_key=routing_key,
     )
     broker.is_worker_process = True
 
@@ -237,6 +223,6 @@ async def broker_with_delayed_message_plugin(
 
     await _cleanup_amqp_resources(
         amqp_url,
-        [exchange_name, broker._delay_plugin_exchange_name],
-        [queue_name, delay_queue_name, dead_queue_name],
+        [exchange_name, broker._delayed_message_exchange.name],
+        [queue_name, dead_queue_name],
     )

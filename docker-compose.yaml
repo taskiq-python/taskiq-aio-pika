@@ -2,6 +2,7 @@ services:
   rabbitmq:
     container_name: taskiq_aio_pika_rabbitmq
     image: heidiks/rabbitmq-delayed-message-exchange:latest
+    # image: rabbitmq:3.13.7-management   # rabbit with management UI for debugging
     environment:
       RABBITMQ_DEFAULT_USER: "guest"
       RABBITMQ_DEFAULT_PASS: "guest"
@@ -14,4 +15,13 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
-      - "61613:61613"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+  redis:
+    container_name: taskiq_aio_pika_redis
+    image: redis:latest
+    ports:
+      - "6379:6379"
+
+volumes:
+  rabbitmq_data:
