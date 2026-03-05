@@ -8,7 +8,7 @@ from aio_pika import Channel
 from taskiq_aio_pika import AioPikaBroker
 from taskiq_aio_pika.exceptions import ExchangeNotDeclaredError, QueueNotDeclaredError
 from taskiq_aio_pika.exchange import Exchange
-from taskiq_aio_pika.queue import Queue, QueueType
+from taskiq_aio_pika.queue import Queue
 from tests.conftest import _cleanup_amqp_resources
 
 
@@ -20,11 +20,11 @@ class TestStartup:
         yield
         if self.broker is not None:
             await self.broker.shutdown()
-            queue_names = [queue.name for queue in self.broker._task_queues] + [
-                self.broker._dead_letter_queue.name,
-            ]
-            if self.broker._delay_queue is not None:
-                queue_names.append(self.broker._delay_queue.name)
+            queue_names = (
+                [queue.name for queue in self.broker._task_queues]
+                + [queue.delay_queue_name for queue in self.broker._task_queues]
+                + [self.broker._dead_letter_queue.name]
+            )
             await _cleanup_amqp_resources(
                 amqp_url,
                 [self.broker._exchange.name],
@@ -70,19 +70,12 @@ class TestStartup:
         amqp_url: str,
         test_channel: Channel,
         exchange_name: str,
-        delay_queue_name: str,
     ) -> None:
         # given
         self.broker = AioPikaBroker(
             url=amqp_url,
             exchange=Exchange(
                 name=exchange_name,
-                declare=True,
-                durable=False,
-            ),
-            delay_queue=Queue(
-                name=delay_queue_name,
-                type=QueueType.CLASSIC,
                 declare=True,
                 durable=False,
             ),
@@ -229,7 +222,7 @@ class TestStartup:
         ):
             await self.broker.startup()
 
-    async def test_when_delay_queue_not_specified__broker_does_not_create_delay_queue(
+    async def test_when_broker_starts__delay_queue_is_created_for_each_task_queue(
         self,
         amqp_url: str,
         test_channel: Channel,
@@ -248,6 +241,5 @@ class TestStartup:
         await self.broker.startup()
 
         # then
-        assert self.broker._delay_queue is None
-        with pytest.raises(aiormq.exceptions.ChannelNotFoundEntity):
-            await test_channel.get_queue("taskiq.delay", ensure=True)
+        delay_queue = await test_channel.get_queue("taskiq.delay", ensure=True)
+        assert delay_queue.name == "taskiq.delay"
