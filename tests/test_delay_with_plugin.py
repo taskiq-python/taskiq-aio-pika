@@ -19,7 +19,7 @@ async def test_when_delayed_message_plugin_enabled__then_send_with_delay_must_wo
         task_id="1",
         task_name="name",
         message=b"message",
-        labels={"delay": "2"},
+        labels={"x_delay": "2"},
     )
 
     # when & then
