@@ -12,9 +12,8 @@ async def test_when_delayed_message_queue_exists__then_send_with_delay_must_work
     broker: AioPikaBroker,
     test_channel: Channel,
     queue_name: str,
-    delay_queue_name: str,
 ) -> None:
-    delay_queue = await test_channel.get_queue(delay_queue_name)
+    delay_queue = await test_channel.get_queue(f"{queue_name}.delay")
     main_queue = await test_channel.get_queue(queue_name)
     broker_msg = BrokerMessage(
         task_id="1",

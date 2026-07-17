@@ -46,16 +46,6 @@ def queue_name() -> str:
 
 
 @pytest.fixture
-def delay_queue_name() -> str:
-    """
-    Generated name for delay queue.
-
-    :return: random exchange name.
-    """
-    return uuid4().hex + "_delay_queue"
-
-
-@pytest.fixture
 def dead_queue_name() -> str:
     """
     Generated name for dead letter queue.
@@ -141,7 +131,6 @@ async def _cleanup_amqp_resources(
 async def broker(
     amqp_url: str,
     queue_name: str,
-    delay_queue_name: str,
     dead_queue_name: str,
     exchange_name: str,
     test_channel: Channel,
@@ -154,11 +143,6 @@ async def broker(
         ),
         dead_letter_queue=Queue(
             name=dead_queue_name,
-            declare=True,
-            type=QueueType.CLASSIC,
-        ),
-        delay_queue=Queue(
-            name=delay_queue_name,
             declare=True,
             type=QueueType.CLASSIC,
         ),
@@ -181,7 +165,7 @@ async def broker(
     await _cleanup_amqp_resources(
         amqp_url,
         [exchange_name],
-        [queue_name, delay_queue_name, dead_queue_name],
+        [queue_name, f"{queue_name}.delay", dead_queue_name],
     )
 
 

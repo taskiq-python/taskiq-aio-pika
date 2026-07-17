@@ -56,3 +56,18 @@ class Queue:
 
     # will be used during message consumption
     consumer_arguments: FieldTable = field(default_factory=dict)
+
+    @property
+    def delay_queue_name(self) -> str:
+        """Return the name of the delay queue for this queue."""
+        return f"{self.name}.delay"
+
+    @property
+    def delay_queue_routing_key(self) -> str:
+        """Return the routing key used to publish messages to the delay queue."""
+        return self.delay_queue_name
+
+    @property
+    def queue_routing_key(self) -> str:
+        """Return the effective routing key for this queue."""
+        return self.routing_key or self.name

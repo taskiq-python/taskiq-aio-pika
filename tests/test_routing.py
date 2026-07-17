@@ -23,11 +23,11 @@ class TestRouting:
         yield
         if self.broker is not None:
             await self.broker.shutdown()
-            queue_names = [queue.name for queue in self.broker._task_queues] + [
-                self.broker._dead_letter_queue.name,
-            ]
-            if self.broker._delay_queue is not None:
-                queue_names.append(self.broker._delay_queue.name)
+            queue_names = (
+                [queue.name for queue in self.broker._task_queues]
+                + [queue.delay_queue_name for queue in self.broker._task_queues]
+                + [self.broker._dead_letter_queue.name]
+            )
             await _cleanup_amqp_resources(
                 amqp_url,
                 [self.broker._exchange.name],
