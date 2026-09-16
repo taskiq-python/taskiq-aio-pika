@@ -1,5 +1,4 @@
 import asyncio
-import sys
 from collections.abc import AsyncGenerator, Callable
 from datetime import timedelta
 from logging import getLogger
@@ -10,11 +9,7 @@ from aio_pika import DeliveryMode, ExchangeType, Message, connect_robust
 from aio_pika.abc import AbstractChannel, AbstractQueue, AbstractRobustConnection
 from pamqp.common import FieldTable
 from taskiq import AckableMessage, AsyncBroker, AsyncResultBackend, BrokerMessage
-
-if sys.version_info >= (3, 11):
-    from typing import Self
-else:
-    from typing_extensions import Self
+from typing_extensions import Self
 
 from taskiq_aio_pika.exceptions import (
     ExchangeNotDeclaredError,

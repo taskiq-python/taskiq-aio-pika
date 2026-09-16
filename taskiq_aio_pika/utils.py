@@ -1,12 +1,8 @@
 import asyncio
-import sys
 from collections.abc import AsyncGenerator
 from typing import Any, TypeVar
 
-if sys.version_info >= (3, 15):
-    from typing import Sentinel
-else:
-    from typing_extensions import Sentinel
+from typing_extensions import Sentinel
 
 _T = TypeVar("_T")
 _SENTINEL = Sentinel("_SENTINEL")
