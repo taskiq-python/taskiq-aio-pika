@@ -26,6 +26,7 @@ class Queue:
         passive: Whether to check if the queue exists without creating it.
         auto_delete: Whether the queue should be auto-deleted.
         max_priority: The maximum priority for the queue.
+        delivery_limit: The maximum number of delivery attempts for a message before it is dead-lettered.
         arguments: Additional arguments for the queue declaration.
         timeout: Timeout for queue declaration.
         routing_key: The routing key for the queue.
@@ -46,6 +47,7 @@ class Queue:
     passive: bool = False
     auto_delete: bool = False
     max_priority: int | None = None
+    delivery_limit: int | None = None
     arguments: FieldTable = field(default_factory=dict)
     timeout: int | float | None = None
 

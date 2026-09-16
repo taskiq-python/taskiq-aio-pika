@@ -122,6 +122,28 @@ async def main():
     await prio_task.kicker().with_labels(priority=None).kiq()
 ```
 
+## Poison message handling
+
+Quorum queues (the default queue type used by this broker) keep track of how many times a message has been redelivered. This is useful for preventing "poison messages" — messages that crash the consumer (e.g. via an OOM) before it can ack, nack, or update a retry count — from being redelivered forever.
+
+Set `delivery_limit` on a `Queue` to have RabbitMQ automatically dead-letter a message once it has been redelivered too many times, instead of requeuing it indefinitely:
+
+```python
+from taskiq_aio_pika import AioPikaBroker, Queue, QueueType
+
+broker = AioPikaBroker(
+    task_queues=[
+        Queue(
+            name="taskiq",
+            type=QueueType.QUORUM,
+            delivery_limit=5,
+        ),
+    ],
+)
+```
+
+Once a message has been redelivered more than `delivery_limit` times, RabbitMQ dead-letters it to the broker's dead-letter queue instead of redelivering it again — no application code involved. `delivery_limit` is only supported by quorum queues. See the [RabbitMQ docs](https://www.rabbitmq.com/docs/quorum-queues#poison-message-handling) for details.
+
 ## Custom Queue and Exchange arguments
 
 You can pass custom arguments to the underlying RabbitMQ queues and exchange declaration by using the `Queue`/`Exchange` classes from `taskiq_aio_pika`. If you used `faststream` before you are probably familiar with this concept.
