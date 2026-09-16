@@ -25,7 +25,7 @@ async def add_one(value: int) -> int:
 async def main() -> None:
     await broker.startup()
     # Send the task to the broker.
-    task = await add_one.kicker().with_labels(delay=2).kiq(1)
+    task = await add_one.kicker().with_labels(x_delay=2).kiq(1)
     print("Task sent with 2 seconds delay.")
     # Wait for the result.
     result = await task.wait_result(timeout=3)

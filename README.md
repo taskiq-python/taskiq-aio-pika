@@ -39,14 +39,14 @@ broker = AioPikaBroker(
 )
 ```
 
-After that you have to specify delay label. You can do it with `task` decorator, or by using kicker.
+After that you have to specify x_delay label. You can do it with `task` decorator, or by using kicker.
 
 In this type of delay we are using additional queue with `expiration` parameter. After declared time message will be deleted from `delay` queue and sent to the main queue. For example:
 
 ```python
 broker = AioPikaBroker(...)
 
-@broker.task(delay=3)
+@broker.task(x_delay=3)
 async def delayed_task() -> int:
     return 1
 
@@ -57,11 +57,11 @@ async def main():
     await delayed_task.kiq()
 
     # This message is going to be received after the delay in 4 seconds.
-    # Since we overridden the `delay` label using kicker.
-    await delayed_task.kicker().with_labels(delay=4).kiq()
+    # Since we overridden the `x_delay` label using kicker.
+    await delayed_task.kicker().with_labels(x_delay=4).kiq()
 
     # This message is going to be send immediately. Since we deleted the label.
-    await delayed_task.kicker().with_labels(delay=None).kiq()
+    await delayed_task.kicker().with_labels(x_delay=None).kiq()
 
     # Of course the delay is managed by rabbitmq, so you don't
     # have to wait delay period before message is going to be sent.
@@ -80,7 +80,7 @@ broker = AioPikaBroker(
     delayed_message_exchange_plugin=True,
 )
 
-@broker.task(delay=3)
+@broker.task(x_delay=3)
 async def delayed_task() -> int:
     return 1
 
@@ -91,8 +91,8 @@ async def main():
     await delayed_task.kiq()
 
     # This message is going to be received after the delay in 4 seconds.
-    # Since we overridden the `delay` label using kicker.
-    await delayed_task.kicker().with_labels(delay=4).kiq()
+    # Since we overridden the `x_delay` label using kicker.
+    await delayed_task.kicker().with_labels(x_delay=4).kiq()
 ```
 
 ## Priorities

@@ -20,7 +20,7 @@ async def test_when_delayed_message_queue_exists__then_send_with_delay_must_work
         task_id="1",
         task_name="name",
         message=b"message",
-        labels={"delay": "2"},
+        labels={"x_delay": "2"},
     )
     await broker.kick(broker_msg)
 
