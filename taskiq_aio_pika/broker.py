@@ -7,7 +7,6 @@ from typing import Any, TypeVar
 import aiormq
 from aio_pika import DeliveryMode, ExchangeType, Message, connect_robust
 from aio_pika.abc import AbstractChannel, AbstractQueue, AbstractRobustConnection
-from aiostream import stream
 from pamqp.common import FieldTable
 from taskiq import AckableMessage, AsyncBroker, AsyncResultBackend, BrokerMessage
 from typing_extensions import Self
@@ -20,6 +19,7 @@ from taskiq_aio_pika.exceptions import (
 )
 from taskiq_aio_pika.exchange import Exchange
 from taskiq_aio_pika.queue import Queue
+from taskiq_aio_pika.utils import merge_async_iterables
 
 _T = TypeVar("_T")
 
@@ -69,25 +69,20 @@ class AioPikaBroker(AsyncBroker):
         """
         Construct a new broker.
 
-        :param url: url to rabbitmq. If None,
-            the default "amqp://guest:guest@localhost:5672" is used.
+        :param url: url to rabbitmq. If None, the default "amqp://guest:guest@localhost:5672" is used.
         :param result_backend: custom result backend.
         :param task_id_generator: custom task_id generator.
         :param qos: number of messages that worker can prefetch.
         :param loop: specific even loop.
         :param exchange: parameters of exchange that used to send messages.
-        :param task_queues: parameters of queues
-            that will be used to get incoming messages.
+        :param task_queues: parameters of queues that will be used to get incoming messages.
         :param dead_letter_queue: parameters of dead-letter queue.
         :param delay_queue: parameters of queue for simple delay implementation.
-        :param delayed_message_exchange_plugin: turn on or disable
-            delayed-message-exchange rabbitmq plugin.
-        :param delayed_message_exchange: parameters of exchange
-            that used to send messages with delay.
+        :param delayed_message_exchange_plugin: turn on or disable delayed-message-exchange rabbitmq plugin.
+        :param delayed_message_exchange: parameters of exchange that used to send messages with delay.
         :param label_for_routing: label name to use for routing key selection.
         :param label_for_priority: label name to use for message priority.
-        :param connection_kwargs: additional keyword arguments,
-            for connect_robust method of aio-pika.
+        :param connection_kwargs: additional keyword arguments, for connect_robust method of aio-pika.
         """
         super().__init__(result_backend, task_id_generator)
 
@@ -241,10 +236,8 @@ class AioPikaBroker(AsyncBroker):
         """
         Declare all queues.
 
-        It's useful since aio-pika have automatic
-        recover mechanism, which works only if
-        the queue, you're going to listen was
-        declared by aio-pika.
+        It's useful since aio-pika have automatic recover mechanism, which works only if the queue, you're going to
+        listen was declared by aio-pika.
 
         :param channel: channel to used for declaration.
         :return: list of declared queues and their consumer arguments.
@@ -323,8 +316,7 @@ class AioPikaBroker(AsyncBroker):
         """
         Add new queue to the broker.
 
-        This method should be called before startup,
-        otherwise the new queue won't be declared and bound to exchange.
+        This method should be called before startup, otherwise the new queue won't be declared and bound to exchange.
 
         :param queue: queue to add.
         :return: self.
@@ -346,12 +338,8 @@ class AioPikaBroker(AsyncBroker):
         """
         Send message to the exchange.
 
-        This function constructs rmq message
-        and sends it.
-
-        The message has task_id and task_name and labels
-        in headers. And message's routing key is the same
-        as the task_name.
+        This function constructs rmq message and sends it. The message has task_id and task_name and labels in headers.
+        And message's routing key is the same as the task_name.
 
         :raises NoStartupError: if startup wasn't called.
         :raises IncorrectRoutingKeyError: if routing key is incorrect.
@@ -420,8 +408,7 @@ class AioPikaBroker(AsyncBroker):
         """
         Listen to queue.
 
-        This function listens to queue and
-        yields every new message.
+        This function listens to queue and yields every new message.
 
         :raises NoStartupError: if startup wasn't called.
         :yields: parsed broker message.
@@ -446,17 +433,14 @@ class AioPikaBroker(AsyncBroker):
                 # Suppress errors during iterator cleanup if channel is being closed
                 logger.info("Queue iterator closed during shutdown")
 
-        combine = stream.merge(
+        async for message in merge_async_iterables(
             *[
                 body(queue, consumer_args)
                 for queue, consumer_args in queue_with_consumer_args_list
                 if not self._delay_queue or queue.name != self._delay_queue.name
             ],
-        )
-
-        async with combine.stream() as streamer:
-            async for message in streamer:
-                yield message
+        ):
+            yield message
 
     async def shutdown(self) -> None:
         """Close all connections on shutdown."""

@@ -12,3 +12,11 @@ help: ## Show this help
 .PHONY: clear_rabbit
 clear_rabbit:  ## Clear RabbitMQ data volume and restart container
 	@docker stop taskiq_aio_pika_rabbitmq && docker rm taskiq_aio_pika_rabbitmq &&  docker volume rm taskiq-aio-pika_rabbitmq_data && docker compose up -d
+
+.PHONY: lint
+lint:  ## Run linting
+	@uv run ruff check taskiq_aio_pika tests --fix
+
+.PHONY: run_infra
+run_infra:  ## Run infrastructure
+	@docker compose up -d rabbitmq redis
