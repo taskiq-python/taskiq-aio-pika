@@ -18,7 +18,7 @@ from taskiq_aio_pika.exceptions import (
     QueueNotDeclaredError,
 )
 from taskiq_aio_pika.exchange import Exchange
-from taskiq_aio_pika.queue import Queue
+from taskiq_aio_pika.queue import Queue, QueueType
 from taskiq_aio_pika.utils import merge_async_iterables
 
 _T = TypeVar("_T")
@@ -201,10 +201,9 @@ class AioPikaBroker(AsyncBroker):
     ) -> None:
         if self._dead_letter_queue.declare:
             dead_letter_queue_arguments = self._dead_letter_queue.arguments.copy()
-            if self._dead_letter_queue.max_priority is not None:
-                dead_letter_queue_arguments["x-max-priority"] = (
-                    self._dead_letter_queue.max_priority
-                )
+            dead_letter_queue_arguments.update(
+                self._optional_queue_arguments(self._dead_letter_queue),
+            )
             dead_letter_queue_arguments["x-queue-type"] = (
                 self._dead_letter_queue.type.value
             )
@@ -228,6 +227,23 @@ class AioPikaBroker(AsyncBroker):
                     f"Dead-letter queue '{self._dead_letter_queue.name}' "
                     f"was not declared and does not exist.",
                 ) from error
+
+    @staticmethod
+    def _optional_queue_arguments(queue: Queue) -> FieldTable:
+        """Build queue arguments that are only set when explicitly configured."""
+        arguments: FieldTable = {}
+        if queue.max_priority is not None:
+            arguments["x-max-priority"] = queue.max_priority
+        if queue.delivery_limit is not None:
+            if queue.type != QueueType.QUORUM:
+                logger.warning(
+                    "delivery_limit is set for queue '%s', but it is only supported by quorum queues "
+                    "(queue type is '%s'); it will be ignored by RabbitMQ.",
+                    queue.name,
+                    queue.type.value,
+                )
+            arguments["x-delivery-limit"] = queue.delivery_limit
+        return arguments
 
     async def _declare_queues(
         self,
@@ -259,8 +275,7 @@ class AioPikaBroker(AsyncBroker):
 
         for queue in filter(lambda queue: queue.declare, queues):
             per_queue_arguments: FieldTable = queue_default_arguments.copy()
-            if queue.max_priority is not None:
-                per_queue_arguments["x-max-priority"] = queue.max_priority
+            per_queue_arguments.update(self._optional_queue_arguments(queue))
             per_queue_arguments["x-queue-type"] = queue.type.value
             if self._delay_queue and queue.name == self._delay_queue.name:
                 per_queue_arguments["x-dead-letter-exchange"] = self._exchange.name
