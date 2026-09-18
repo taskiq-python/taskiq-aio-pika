@@ -1,12 +1,18 @@
 import asyncio
 from collections.abc import AsyncGenerator, Callable
 from datetime import timedelta
+from functools import partial
 from logging import getLogger
 from typing import Any, TypeVar
 
 import aiormq
 from aio_pika import DeliveryMode, ExchangeType, Message, connect_robust
-from aio_pika.abc import AbstractChannel, AbstractQueue, AbstractRobustConnection
+from aio_pika.abc import (
+    AbstractChannel,
+    AbstractIncomingMessage,
+    AbstractQueue,
+    AbstractRobustConnection,
+)
 from pamqp.common import FieldTable
 from taskiq import AckableMessage, AsyncBroker, AsyncResultBackend, BrokerMessage
 from typing_extensions import Self
@@ -19,6 +25,7 @@ from taskiq_aio_pika.exceptions import (
 )
 from taskiq_aio_pika.exchange import Exchange
 from taskiq_aio_pika.queue import Queue, QueueType
+from taskiq_aio_pika.retries import DEFAULT_KICK_RETRIES, RetriesConfig
 from taskiq_aio_pika.utils import merge_async_iterables
 
 _T = TypeVar("_T")
@@ -64,6 +71,7 @@ class AioPikaBroker(AsyncBroker):
         delayed_message_exchange: Exchange | None = None,
         label_for_routing: str = "queue_name",
         label_for_priority: str = "priority",
+        retries: RetriesConfig | None = None,
         **connection_kwargs: Any,
     ) -> None:
         """
@@ -82,6 +90,7 @@ class AioPikaBroker(AsyncBroker):
         :param delayed_message_exchange: parameters of exchange that used to send messages with delay.
         :param label_for_routing: label name to use for routing key selection.
         :param label_for_priority: label name to use for message priority.
+        :param retries: per-operation retry policies.
         :param connection_kwargs: additional keyword arguments, for connect_robust method of aio-pika.
         """
         super().__init__(result_backend, task_id_generator)
@@ -96,6 +105,9 @@ class AioPikaBroker(AsyncBroker):
 
         self._label_for_routing = label_for_routing
         self._label_for_priority = label_for_priority
+        self._retries: RetriesConfig = {
+            "kick": {**DEFAULT_KICK_RETRIES, **(retries or {}).get("kick", {})},
+        }
 
         self._delay_queue = delay_queue
 
@@ -362,6 +374,7 @@ class AioPikaBroker(AsyncBroker):
         """
         if self.write_channel is None:
             raise NoStartupError("Please run startup before kicking.")
+        write_channel = self.write_channel
         priority = parse_val(int, message.labels.get(self._label_for_priority))
         rmq_message = Message(
             body=message.message,
@@ -395,28 +408,65 @@ class AioPikaBroker(AsyncBroker):
                     f"Check routing keys and queue names in broker queues.",
                 )
 
-        if x_delay is None:
-            exchange = await self.write_channel.get_exchange(
-                self._exchange.name,
-                ensure=False,
-            )
-            await exchange.publish(rmq_message, routing_key=routing_key_name)
-        elif self._delayed_message_exchange_plugin:
-            rmq_message.headers["x-delay"] = int(x_delay * 1000)
-            exchange = await self.write_channel.get_exchange(
-                self._delayed_message_exchange.name,
-            )
-            await exchange.publish(rmq_message, routing_key=routing_key_name)
-        elif self._delay_queue:
-            rmq_message.expiration = timedelta(seconds=x_delay)
-            await self.write_channel.default_exchange.publish(
-                rmq_message,
-                routing_key=self._delay_queue.routing_key or self._delay_queue.name,
-            )
-        else:
-            raise IncorrectRoutingKeyError(
-                "Delay requested but no delay queue or delayed-message-exchange "
-                "is configured in the broker.",
+        async def _publish() -> None:
+            if x_delay is None:
+                exchange = await write_channel.get_exchange(
+                    self._exchange.name,
+                    ensure=False,
+                )
+                await exchange.publish(rmq_message, routing_key=routing_key_name)
+            elif self._delayed_message_exchange_plugin:
+                rmq_message.headers["x-delay"] = int(x_delay * 1000)
+                exchange = await write_channel.get_exchange(
+                    self._delayed_message_exchange.name,
+                )
+                await exchange.publish(rmq_message, routing_key=routing_key_name)
+            elif self._delay_queue:
+                rmq_message.expiration = timedelta(seconds=x_delay)
+                await write_channel.default_exchange.publish(
+                    rmq_message,
+                    routing_key=self._delay_queue.routing_key or self._delay_queue.name,
+                )
+            else:
+                raise IncorrectRoutingKeyError(
+                    "Delay requested but no delay queue or delayed-message-exchange is configured in the broker.",
+                )
+
+        await self._publish_with_retry(_publish)
+
+    async def _publish_with_retry(self, _publish: Callable[[], Any]) -> None:
+        """Run a publish callback, retrying on a transient channel-recovery race."""
+        max_attempts = self._retries["kick"]["max_attempts"]
+        delay = self._retries["kick"]["backoff"]
+        for attempt in range(max_attempts + 1):
+            try:
+                await _publish()
+                return
+            except aiormq.exceptions.ChannelInvalidStateError:
+                if attempt == max_attempts:
+                    raise
+                logger.warning(
+                    "Publish failed because the write channel was invalidated by a connection recovery race; "
+                    "retrying in %.2fs (attempt %d/%d).",
+                    delay,
+                    attempt + 1,
+                    max_attempts,
+                )
+                await asyncio.sleep(delay)
+                delay *= 2
+
+    @staticmethod
+    async def _safe_ack(message: AbstractIncomingMessage, queue_name: str) -> None:
+        """Ack a message, tolerating a channel invalidated by a connection loss."""
+        try:
+            await message.ack()
+        except aiormq.exceptions.ChannelInvalidStateError:
+            logger.warning(
+                "Could not ack message (delivery_tag=%s, redelivered=%s) on queue '%s' - the channel was invalidated by"
+                " a connection loss.",
+                message.delivery_tag,
+                message.redelivered,
+                queue_name,
             )
 
     async def listen(self) -> AsyncGenerator[AckableMessage, None]:
@@ -442,7 +492,7 @@ class AioPikaBroker(AsyncBroker):
                     async for message in iterator:
                         yield AckableMessage(
                             data=message.body,
-                            ack=message.ack,
+                            ack=partial(self._safe_ack, message, queue.name),
                         )
             except (RuntimeError, asyncio.CancelledError):
                 # Suppress errors during iterator cleanup if channel is being closed

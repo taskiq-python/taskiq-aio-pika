@@ -144,6 +144,30 @@ broker = AioPikaBroker(
 
 Once a message has been redelivered more than `delivery_limit` times, RabbitMQ dead-letters it to the broker's dead-letter queue instead of redelivering it again — no application code involved. `delivery_limit` is only supported by quorum queues. See the [RabbitMQ docs](https://www.rabbitmq.com/docs/quorum-queues#poison-message-handling) for details.
 
+## Connection loss and message redelivery
+
+RabbitMQ deliveries are acknowledged on the specific channel they were delivered on. If the underlying connection drops (a network blip, a broker restart, etc.), any message that was already delivered but not yet acked cannot be acked anymore, even after the connection reconnects — the delivery tag isn't valid on a new channel. `AioPikaBroker` handles this by logging a warning and letting the message go instead of crashing the worker; RabbitMQ automatically requeues the message once the old channel closes.
+
+The practical consequence is that a task can run **more than once** whenever a connection is lost while the task is in flight — regardless of `ack_time`. This is a property of AMQP itself, not something a broker can paper over, so:
+
+- Write tasks to be idempotent whenever you can (safe to execute twice with the same effect).
+- If you can't, prefer `ack_time="when_received"` (the taskiq default) to shrink the window between delivery and ack, at the cost of losing the message outright if the worker crashes mid-task instead of duplicating it. `ack_time="when_executed"`/`"when_saved"` hold the message unacked for longer (through task execution / result saving), which widens the duplicate-delivery window but guarantees the message isn't lost if the worker itself crashes.
+
+Publishing (`kick`) is affected too, but differently: right after a connection recovers, there's a short window (order of a second) where the write channel can still be mid-recovery. `AioPikaBroker` retries `kick` automatically in that case — configurable via the `retries` constructor argument:
+
+```python
+from taskiq_aio_pika import AioPikaBroker
+
+broker = AioPikaBroker(
+    retries={
+        "kick": {
+            "max_attempts": 4,  # set to 0 to disable retrying
+            "backoff": 0.2,  # doubled after each retry
+        },
+    },
+)
+```
+
 ## Custom Queue and Exchange arguments
 
 You can pass custom arguments to the underlying RabbitMQ queues and exchange declaration by using the `Queue`/`Exchange` classes from `taskiq_aio_pika`. If you used `faststream` before you are probably familiar with this concept.
